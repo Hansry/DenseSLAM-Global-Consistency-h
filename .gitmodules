@@ -1,0 +1,9 @@
+[submodule "src/gflags"]
+	path = src/gflags
+	url = https://github.com/gflags/gflags
+[submodule "src/ORB-SLAM2-API-M"]
+	path = src/ORB-SLAM2-API-M
+	url = https://github.com/Hansry/ORB-SLAM2-API-M.git
+[submodule "src/InfiniTAM-Global-Consistency-h"]
+	path = src/InfiniTAM-Global-Consistency-h
+	url = https://github.com/Hansry/InfiniTAM-Global-Consistency-h.git
