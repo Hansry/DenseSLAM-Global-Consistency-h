@@ -103,9 +103,7 @@ class DenseSlam {
       bool enable_compositing) {
        
       static_scene_->GetImage(out_image_, preview, model_view);
-//      static_scene_->GetImage(out_image_float_, preview, model_view);
-
-       return out_image_->GetData(MEMORYDEVICE_CPU)->getValues();
+      return out_image_->GetData(MEMORYDEVICE_CPU)->getValues();
     }
 
   
