@@ -56,6 +56,7 @@ DEFINE_int32(fusion_every, 1, "Fuse every kth frame into the map. Used for evalu
                               "behavior under reduced temporal resolution.");
 DEFINE_bool(autoplay, false, "Whether to start with autoplay enabled. Useful for batch experiments.");
 DEFINE_bool(useOrbSLAMViewer, false, "Whether to launch the GUI of ORBSLAM2.");
+DEFINE_bool(viewRaycastDepth, true, "Whether to view the raycast depth.");
 
 
 // Note: the [RIP] tags signal spots where I wasted more than 30 minutes debugging a small, silly
@@ -339,15 +340,7 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
 } // namespace SparsetoDense
 
 int main(int argc, char **argv) {
-  gflags::SetUsageMessage("The GUI for the DynSLAM dense simultaneous localization and mapping "
-                          "system for dynamic environments.\nThis project was built as Andrei "
-                          "Barsan's MSc Thesis in Computer Science at the Swiss Federal "
-                          "Institute of Technology, Zurich (ETHZ) in the Spring/Summer of 2017, "
-                          "under the supervision of Liu Peidong and Professor Andreas Geiger.\n\n"
-                          "Project webpage with source code and more information: "
-                          "https://github.com/AndreiBarsan/DynSLAM\n\n"
-                          "Based on the amazing InfiniTAM volumetric fusion framework (https://github.com/victorprad/InfiniTAM).\n"
-                          "Please see the README.md file for further information and credits.");
+  gflags::SetUsageMessage("The GUI for Sparse to Dense simultaneous localization and mapping (Sparse to Dense).");
   //argc为参数个数，argv为具体参数，
   //第三个参数设为true：该函数处理完成后，argv中只保留argv[1],argc会被设置为1
   //第三个参数设为false:则argc和argv会被保留，但是注意函数会调整argv中的参数
@@ -371,6 +364,7 @@ int main(int argc, char **argv) {
   paramGUI.evaluation_delay = FLAGS_evaluation_delay;
   paramGUI.frame_limit = FLAGS_frame_limit;
   paramGUI.record = FLAGS_record;
+  paramGUI.viewRaycastDepth = FLAGS_viewRaycastDepth;
   SparsetoDense::gui::PangolinGui pango_gui(dense_slam, input, paramGUI);
   pango_gui.Run();
 

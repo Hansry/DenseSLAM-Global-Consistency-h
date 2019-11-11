@@ -16,7 +16,7 @@ using namespace SparsetoDense::utils;
 ITMLib::Engine::ITMMainEngine::GetImageType GetItmVisualization(PreviewType preview_type) {
   switch(preview_type) {
     case PreviewType::kDepth:
-      return ITMLib::Engine::ITMMainEngine::GetImageType::InfiniTAM_IMAGE_ORIGINAL_DEPTH;//????
+      return ITMLib::Engine::ITMMainEngine::GetImageType::InfiniTAM_IMAGE_ORIGINAL_DEPTH;
     case PreviewType::kGray:
       return ITMLib::Engine::ITMMainEngine::GetImageType::InfiniTAM_IMAGE_FREECAMERA_SHADED;
     case PreviewType::kColor:
@@ -27,6 +27,8 @@ ITMLib::Engine::ITMMainEngine::GetImageType GetItmVisualization(PreviewType prev
 //      return ITMLib::ITMMainEngine::GetImageType::InfiniTAM_IMAGE_FREECAMERA_COLOUR_FROM_DEPTH_WEIGHT;
     case PreviewType::kLatestRaycast:
       return ITMLib::Engine::ITMMainEngine::GetImageType::InfiniTAM_IMAGE_FREECAMERA_SHADED;
+    case PreviewType::kRaycastDepth:
+      return ITMLib::Engine::ITMMainEngine::GetImageType::InfiniTAM_IMAGE_FREECAMERA_DEPTH;
 
     default:
       throw std::runtime_error(Format("Unknown preview type: %d", preview_type));
@@ -131,7 +133,7 @@ void ItmToCv(const ITMShortImage &itm, cv::Mat1s *out_mat) {
   memcpy(out_mat->data, itm_data, itm.noDims[0] * itm.noDims[1] * sizeof(int16_t));
 }
 
-/// @brief 将深度图从Float转成Short类型
+/// @brief 将深度图从Float转成Short类型,这里将float转成short会乘上1000
 void FloatDepthmapToShort(const float *pixels, cv::Mat1s &out_mat) {
   const int kMetersToMillimeters = 1000;
 //   int count = 0;
@@ -205,7 +207,7 @@ void InfiniTamDriver::GetFloatImage(
   if (nullptr != this->view) {
     ITMLib::Objects::ITMPose itm_freeview_pose = PoseFromPangolin(model_view);
 
-    if (get_image_type != PreviewType::kDepth) {
+    if (get_image_type != PreviewType::kRaycastDepth) {
       std::cerr << "Warning: Can only preview depth as float." << std::endl;
       return;
     }
@@ -220,21 +222,6 @@ void InfiniTamDriver::GetFloatImage(
   }
 }
 
-// ITMLib::ITMTrackingState::TrackingResult InfiniTamDriver::trackingResult(const cv::Mat3b &rgb_image,
-//                                                     const cv::Mat1s &raw_depth_image){
-// //     for(int i=0; i<raw_depth_image.rows; i++){
-// //     for(int j=0; j<raw_depth_image.cols; j++){
-// //       if(raw_depth_image.at<short>(i,j)>0){
-// //          std::cout << "++++++++++++++++++++++=:" << raw_depth_image.at<short>(i,j) << std::endl;
-// //       }
-// //     }
-// //   }
-//   
-//   CvToItm(rgb_image, rgb_itm_);
-//   CvToItm(raw_depth_image, raw_depth_itm_);
-//   
-//   return this->ProcessFrame(rgb_itm_, raw_depth_itm_);
-// }
 //将OpenCV中的rgb_image和raw_depth_image转换成InfiniTAM中对应的数据类型，并进行更新
 void InfiniTamDriver::UpdateView(const cv::Mat3b &rgb_image,
                                  const cv::Mat1s &raw_depth_image) {

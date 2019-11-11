@@ -46,7 +46,7 @@ class DenseSlam {
       sparse_sf_provider_(sparse_sf_provider),
       // Allocate the ITM buffers on the CPU and on the GPU (true, true).
       out_image_(new ITMUChar4Image(input_shape, true, true)),
-      out_image_float_(new ITMUChar4Image(input_shape, true, true)),
+      out_image_float_(new ITMFloatImage(input_shape, true, true)),
       input_rgb_image_(new cv::Mat3b(input_shape.x, input_shape.y)),
       input_raw_depth_image_(new cv::Mat1s(input_shape.x, input_shape.y)),
       current_frame_no_(0),
@@ -83,21 +83,19 @@ class DenseSlam {
   }
 
   /// \brief Returns a preview of the static parts from the latest depth frame.
-  /// \brief 返回最新深度图静态部分的预览
-  const cv::Mat1s* GetStaticDepthPreview() {
-//     	cv::Mat1s test_depth = static_scene_->GetDepthPreview()->clone();
-//     	for(int i = 0 ; i<test_depth.rows; i++)
-// 	  for(int j = 0; j <test_depth.cols; j++){
-//  	    if(test_depth.at<int16_t>(i,j)>0){
-// 	      std::cout << "test depth: "<<test_depth.at<int16_t>(i,j)<<std::endl;
-//  	    }
-// 	  }
-    return static_scene_->GetDepthPreview();
+  /// \brief 返回最新光线投影得到的深度图静态部分的预览
+  const float* GetRaycastDepthPreview(
+      const pangolin::OpenGlMatrix &model_view,
+      PreviewType preview,
+      bool enable_compositing) {
+        
+      static_scene_->GetFloatImage(out_image_float_, preview, model_view);
+      return out_image_float_->GetData(MEMORYDEVICE_CPU);
   }
 
   /// \brief Returns an RGBA preview of the reconstructed static map.
   /// \brief 返回重构的静态地图的RGBA预览
-  const unsigned char* GetStaticMapRaycastPreview(
+  const unsigned char* GetMapRaycastPreview(
       const pangolin::OpenGlMatrix &model_view,
       PreviewType preview,
       bool enable_compositing) {
@@ -105,17 +103,6 @@ class DenseSlam {
       static_scene_->GetImage(out_image_, preview, model_view);
       return out_image_->GetData(MEMORYDEVICE_CPU)->getValues();
     }
-
-  
-  /// \brief Returns a raycast from the specified pose.
-  /// If dynamic mode is enabled, the raycast will also contain the current active reconstructions,
-  /// \brief 返回某个指定位姿的光线投影，如果启动了动态检测模式，那么该光线投影还会包含当前被检测出的物体的重建部分
-//   const unsigned char* GetStaticMapRaycastDepthPreview(const pangolin::OpenGlMatrix &model_view, bool enable_compositing) {
-// //     static_scene_->GetFloatImage(out_image_float_, PreviewType::kDepth, model_view);
-//     PreviewType preview;
-//     static_scene_->GetFloatImage(out_image_float_, preview, model_view);
-//     return out_image_float_->GetData(MEMORYDEVICE_CPU)->getValues();
-//   }
 
   int GetInputWidth() const {
     return input_width_;
@@ -230,7 +217,7 @@ private:
 //   dynslam::eval::Evaluation *evaluation_;
 
   ITMUChar4Image *out_image_;
-  ITMUChar4Image *out_image_float_;
+  ITMFloatImage *out_image_float_;
   cv::Mat3b *input_rgb_image_;
   cv::Mat1s *input_raw_depth_image_;
   

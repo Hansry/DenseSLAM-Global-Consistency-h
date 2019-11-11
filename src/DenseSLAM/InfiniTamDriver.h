@@ -59,8 +59,11 @@ void ItmToCv(const ITMShortImage &itm, cv::Mat1s *out_mat);
 /// \brief 将InfiniTAM浮点类型的深度图转成OpenCV格式的深度图
 void ItmDepthToCv(const ITMFloatImage &itm, cv::Mat1s *out_mat);
 
-/// \brief 将深度图从Float转到Short
+/// @brief 将深度图从Float转成Short类型,这里将float转成short会乘上1000
 void FloatDepthmapToShort(const float *pixels, cv::Mat1s &out_mat);
+
+/// \brief 将深度图从Float转到Short
+void FloatDepthmapToShortForRaycast(const float* pixels, cv::Mat1s &out_mat);
 
 /// \brief 将InfiniTAM 4x4的矩阵转换为Eigen类型
 Eigen::Matrix4f ItmToEigen(const Matrix4f &itm_matrix);
@@ -224,7 +227,8 @@ public:
   /// @brief 返回世界坐标系到当前帧的变换，Tw->c,the transform from world to current
   Eigen::Matrix4f GetPose() const{
       /// 得到主子地图到
-      const ITMLocalMap* PrimaryLocalMap = this->GetPrimaryLocalMap();
+      /// const ITMLocalMap* PrimaryLocalMap = this->GetPrimaryLocalMap();
+      const ITMLocalMap* PrimaryLocalMap = this->SpecificLocalMap;
       return GetLocalMapPose(PrimaryLocalMap);
   }
 

@@ -45,6 +45,7 @@ struct ParamSLAMGUI{
   bool chase_cam = false;
   bool record = false;
   bool autoplay = false;
+  bool viewRaycastDepth = false;
 };
 
 /// \brief The main GUI and entry point for DenseSLAM
@@ -170,6 +171,7 @@ protected:
   pangolin::View *detail_views_;
   pangolin::View rgb_view_;
   pangolin::View depth_view_;
+  pangolin::View raycast_depth_view_;
   pangolin::View segment_view_;
   pangolin::View object_view_;
   pangolin::View object_reconstruction_view_;
@@ -192,7 +194,7 @@ protected:
   pangolin::GlTexture *pane_texture_mono_uchar_;
   pangolin::GlTexture *pane_texture_dense_;
 
-  pangolin::Var<string> *reconstructions;
+  pangolin::Var<string> *NumLocalMap;
 
   // Atomic because it gets set from a UI callback. Technically, Pangolin shouldn't invoke callbacks
   // from a different thread, but using atomics for this is generally a good practice anyway.
@@ -218,6 +220,7 @@ protected:
   int visualized_object_idx_ = 0;
 
   int current_preview_type_ = PreviewType::kLatestRaycast;
+  int current_preview_depth_type = PreviewType::kRaycastDepth;
 
   int current_lidar_vis_ = VisualizeError::kNone;
 

@@ -23,7 +23,7 @@ void PangolinGui::DrawPose(long int current_time_ms){
     // Make the poses a little bit more visible (set to > 0.0f to enable).
     float frustum_root_cube_scale = 0.00f;
 
-    //对所有位姿进行绘制
+    /// NOTE 对所有位姿进行绘制
     const float kMaxFrustumScale = 0.66;
     Eigen::Vector3f color_white(1.0f, 1.0f, 1.0f);
     for (int i = 0; i < static_cast<int>(phist.size()) - 1; ++i) {
@@ -31,7 +31,7 @@ void PangolinGui::DrawPose(long int current_time_ms){
       DrawPoseFrustum(phist[i], color_white, frustum_scale, frustum_root_cube_scale);
     }
 
-    //对最新的位姿颜色进行加深
+    /// NOTE 对最新的位姿颜色进行加深
     if (! phist.empty()) {
       // Highlight the most recent pose.
       Eigen::Vector3f glowing_green(
@@ -90,7 +90,7 @@ void PangolinGui::Run(){
       glDisable(GL_DEPTH_TEST);
       glDepthMask(false);
 
-      //是否在chase cam模式下预览重建，第三视角
+      /// NOTE 是否在chase cam模式下预览重建，第三视角
       if (paramGUI.chase_cam) 
       {
         Eigen::Matrix4f cam_mv = dense_slam_->GetPose();
@@ -104,18 +104,6 @@ void PangolinGui::Run(){
          pane_cam_->SetModelViewMatrix(pm);
 	 orb_pane_cam_->SetModelViewMatrix(pm);
       }
-//       else{
-// 	Eigen::Matrix4f cam_mv = dense_slam_->GetPose().inverse();
-//         pangolin::OpenGlMatrix pm(cam_mv);
-//         pm =
-//             // Good for odo 05
-//              pangolin::OpenGlMatrix::RotateY(M_PI * 0.5 * 0.05f) *
-//              pangolin::OpenGlMatrix::RotateX(M_PI * 0.5 * 0.03f) *
-//              pangolin::OpenGlMatrix::Translate(-0.5, 1.0, 15.0) *
-//              pm;
-//          pane_cam_->SetModelViewMatrix(pm);
-// 	 orb_pane_cam_->SetModelViewMatrix(pm);
-//       }
 
       int evaluated_frame_idx = dense_slam_->GetCurrentFrameNo() - 1 - paramGUI.evaluation_delay;
       if (evaluated_frame_idx > 0) {
@@ -127,7 +115,7 @@ void PangolinGui::Run(){
 // 
         bool enable_compositing = (paramGUI.evaluation_delay == 0);
 // 	
-// 	//通过模型光线投影回来的深度图
+// 	/// NOTE 通过模型光线投影回来的深度图
 // // 	const unsigned char *synthesized_depthmap = nullptr;
 // //         synthesized_depthmap = dense_slam_->GetStaticMapRaycastDepthPreview(pango_pose, enable_compositing);
 //         auto input_depthmap = shared_ptr<cv::Mat1s>(nullptr);
@@ -152,7 +140,7 @@ void PangolinGui::Run(){
             else {
               message = "Free cam preview";
             }
-            preview = dense_slam_->GetStaticMapRaycastPreview(pane_cam_->GetModelViewMatrix(),
+            preview = dense_slam_->GetMapRaycastPreview(pane_cam_->GetModelViewMatrix(),
 //                  pango_pose,
                   static_cast<PreviewType>(current_preview_type_),
 		  enable_compositing);
@@ -194,65 +182,12 @@ void PangolinGui::Run(){
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         glColor3f(1.0f, 1.0f, 1.0f);
-//        main_view_->Activate();
-
-//         if (need_lidar) {
-//           pane_texture_->RenderToViewport(true);
-//           bool visualize_input = (current_lidar_vis_ == kInputVsLidar);
-//          eval::ErrorVisualizationCallback vis_callback(
-//              delta_max_visualization,
-//              visualize_input,
-//              Eigen::Vector2f(main_view_->GetBounds().w, main_view_->GetBounds().h),
-//              lidar_vis_colors_,
-//              lidar_vis_vertices_);
-//           auto vis_mode = eval::SegmentedCallback::LidarAssociation::kStaticMap;
-//          auto seg = dyn_slam_->GetSpecificSegmentationForEval(input_frame_idx);
-//           eval::SegmentedVisualizationCallback vis_callback(
-//               delta_max_visualization,
-//               visualize_input,
-//               Eigen::Vector2f(main_view_->GetBounds().w, main_view_->GetBounds().h),
-//               lidar_vis_colors_,
-//               lidar_vis_vertices_,
-//               seg.get(),
-// //              dyn_slam_->GetInstanceReconstructor(),
-//               nullptr,
-//               vis_mode
-//           );
-//           if (vis_mode == eval::SegmentedCallback::LidarAssociation::kDynamicReconstructed) {
-//             message += " | Reconstructed dynamic objects only ";
-//           }
-//           else if (vis_mode == eval::SegmentedCallback::LidarAssociation::kStaticMap) {
-//             message += " | Static map only";
-//           }
-// 
-//           bool compare_on_intersection = true;
-//           bool kitti_style = true;
-//           eval::EvaluationCallback eval_callback(delta_max_visualization,
-//                                                  compare_on_intersection,
-//                                                  kitti_style);
-// 
-//           if (velodyne->FrameAvailable(input_frame_idx)) {
-//             auto visualized_lidar_pointcloud = velodyne->ReadFrame(input_frame_idx);
-//             dyn_slam_->GetEvaluation()->EvaluateDepth(visualized_lidar_pointcloud,
-//                                                       synthesized_depthmap,
-//                                                       *input_depthmap,
-//                                                       {&vis_callback, &eval_callback});
-//             auto result = eval_callback.GetEvaluation();
-//             DepthResult depth_result = current_lidar_vis_ == kFusionVsLidar ? result.fused_result
-//                                                                             : result.input_result;
-//             message += utils::Format(" | Acc (with missing): %.3lf | Acc (ignore missing): %.3lf",
-//                                      depth_result.GetCorrectPixelRatio(true),
-//                                      depth_result.GetCorrectPixelRatio(false));
-//             vis_callback.Render();
-//           }
-//         }
-
-      //  font.Text(message).Draw(-0.90f, 0.80f);
       }
+      
       //*/
       //font.Text("Frame #%d", dyn_slam_->GetCurrentFrameNo()).Draw(-0.90f, 0.90f);
       
-//      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+//    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
       OrbSlamMapDrawer_->GetCurrentOpenGLCameraMatrix(OrbSlamTwc_);
       orbslam_view_->Activate(*orb_pane_cam_);
       if(dense_slam_->GetCurrentFrameNo()>=1){
@@ -272,7 +207,7 @@ void PangolinGui::Run(){
       //激活rgb_view_以便绘制
       rgb_view_.Activate();
       glColor3f(1.0f, 1.0f, 1.0f);
-      /// \brief 当前帧大于1，对RGB图片进行预览。 
+      /// NOTE  当前帧大于1，对RGB图片进行预览。 
       /// 若启动动态模式，则显示的检测动态物体的RGB图像，不启动动态检测的时候， 则显示的是ORB特征点的RGB图片
       if(dense_slam_->GetCurrentFrameNo() >= 1 && dense_slam_->IsDynamicMode()) {
 	//是否显示原来的图片预览
@@ -293,21 +228,36 @@ void PangolinGui::Run(){
       if (dense_slam_->GetCurrentFrameNo() > 1 && preview_sf_->Get()) {
           PreviewSparseSF(dense_slam_->GetLatestFlow().matches, rgb_view_);
       }
-
-      //激活depth_viewe_以进行绘制，对深度图进行显示
+      
+      
+      bool enable_compositing_dense = (paramGUI.evaluation_delay == 0);
+      /// NOTE 激活depth_viewe_以进行绘制，对深度图进行显示
       depth_view_.Activate();
-      glColor3f(1.0, 1.0, 1.0);
-      //模型光线投影回来的深度 && 启动动态模式
-      if (!display_raw_previews_->Get() && dense_slam_->IsDynamicMode()) {
-	UploadCvTexture(*(dense_slam_->GetStaticDepthPreview()), *pane_texture_, false, GL_SHORT);
+      glColor3f(1.0,1.0,1.0);
+      /// 可视化光线投影的深度图
+      if(paramGUI.viewRaycastDepth){
+          cv::Size2i tempRaycastDepthSize = dense_slam_input_->GetDepthSize();
+          cv::Mat1s *tempRaycastShort = new cv::Mat1s(tempRaycastDepthSize.height, tempRaycastDepthSize.width);
+          Eigen::Matrix4f cam_raycast = dense_slam_->GetPose().inverse();
+          pangolin::OpenGlMatrix pm_raycast(cam_raycast);
+          /// NOTE 光线投影回来的深度图
+          const float* tempRaycastDepth = dense_slam_ -> GetRaycastDepthPreview(pm_raycast, static_cast<PreviewType>(current_preview_depth_type), enable_compositing_dense);
+          if(tempRaycastDepth != nullptr ){
+	  SparsetoDense::FloatDepthmapToShort(tempRaycastDepth, *tempRaycastShort);
+	  if(tempRaycastDepth != nullptr){
+	      UploadCvTexture(*tempRaycastShort,*pane_texture_, false, GL_SHORT);
+	   }
+         }
+         delete tempRaycastShort;
       }
-      else {
-       UploadCvTexture(*(dense_slam_->GetDepthPreview()), *pane_texture_, false, GL_SHORT);
-       //UploadCvTexture(*(dense_slam_->GetStaticDepthPreview()), *pane_texture_, false, GL_SHORT);
+      else{
+	 if (dense_slam_->GetDepthPreview() != nullptr) {
+             UploadCvTexture(*(dense_slam_->GetDepthPreview()), *pane_texture_, false, GL_SHORT);
+         }
       }
       pane_texture_->RenderToViewport(true);
-
-      //以第一视角观察orbslam以及稠密地图的第一视角
+            
+      /// NOTE 以第一视角观察orbslam以及稠密地图的第一视角
       if(dense_slam_->GetCurrentFrameNo()>=1 && !dense_slam_->IsDynamicMode()){
 	  orb_trajectory_view_->Activate(*orb_Trajectory_pane_cam_);
 	  glColor3f(1.0,1.0,1.0);
@@ -320,14 +270,13 @@ void PangolinGui::Run(){
 	  OrbSlamMapDrawer_->DrawMapPoints();
         }
         
-	bool enable_compositing_dense = (paramGUI.evaluation_delay == 0);
 	const unsigned char *preview_dense = nullptr;
         dense_map_fpv_view_->Activate(*dense_map_pane_cam_);
 	Eigen::Matrix4f cam_mv = dense_slam_->GetPose().inverse();
         pangolin::OpenGlMatrix pm(cam_mv);
         dense_map_pane_cam_->SetModelViewMatrix(pm);
 	glColor3f(1.0,1.0,1.0);
-        preview_dense = dense_slam_->GetStaticMapRaycastPreview(dense_map_pane_cam_->GetModelViewMatrix(),
+        preview_dense = dense_slam_->GetMapRaycastPreview(dense_map_pane_cam_->GetModelViewMatrix(),
                   static_cast<PreviewType>(current_preview_type_),enable_compositing_dense);
         pane_texture_dense_->Upload(preview_dense, GL_RGBA, GL_UNSIGNED_BYTE);
         pane_texture_dense_->RenderToViewport(true);
@@ -337,7 +286,7 @@ void PangolinGui::Run(){
       // Swap frames and Process Events
       pangolin::FinishFrame();
 
-      //将GUI的视屏保存到本地中
+      /// NOTE 将GUI的视屏保存到本地中
       if (paramGUI.record) {
         const string kRecordingRoot = "../recordings/";
         if (! utils::FileExists(kRecordingRoot)) {
@@ -525,8 +474,7 @@ void PangolinGui::CreatePangolinDisplays(){
     pangolin::Var<function<void(void)>> orb_slam2_button("ui.or[B] slam", ORB_SLAM2);
     pangolin::RegisterKeyPressCallback('b', ORB_SLAM2);
     
-    
-    reconstructions = new pangolin::Var<string>("ui.Rec", "");
+    NumLocalMap = new pangolin::Var<string>("ui.Number of Submap: ", "");
 //     pangolin::Var<function<void(void)>> previous_object("ui.Previous Object [z]", [this]() {
 //       SelectPreviousVisualizedObject();
 //     });
@@ -726,9 +674,7 @@ void PangolinGui::CreatePangolinDisplays(){
        plotter_ = new pangolin::Plotter(&data_log_, 0.0f, 200.0f, -0.1f, 25.0f, tick_x, tick_y);
        plotter_->Track("$i");  // This enables automatic scrolling for the live plots.
     }
-    // TODO(andrei): Maybe wrap these guys in another controller, make it an equal layout and
-    // automagically support way more aspect ratios?
-    
+
     //main_views:指的是融合后的地图
     //detail_views:指的是static_rgb、 static_depth、 segment_view_、object_view
     //SetBounds(bottom, top, left, right)
