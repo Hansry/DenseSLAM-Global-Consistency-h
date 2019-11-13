@@ -25,6 +25,8 @@ ITMLib::Engine::ITMMainEngine::GetImageType GetItmVisualization(PreviewType prev
       return ITMLib::Engine::ITMMainEngine::GetImageType::InfiniTAM_IMAGE_FREECAMERA_COLOUR_FROM_NORMAL;
 //     case PreviewType::kWeight:
 //      return ITMLib::ITMMainEngine::GetImageType::InfiniTAM_IMAGE_FREECAMERA_COLOUR_FROM_DEPTH_WEIGHT;
+    case PreviewType::kRaycastImage:
+      return ITMLib::Engine::ITMMainEngine::GetImageType::InfiniTAM_IMAGE_SCENERAYCAST; 
     case PreviewType::kLatestRaycast:
       return ITMLib::Engine::ITMMainEngine::GetImageType::InfiniTAM_IMAGE_FREECAMERA_SHADED;
     case PreviewType::kRaycastDepth:

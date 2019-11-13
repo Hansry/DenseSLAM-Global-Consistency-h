@@ -33,9 +33,15 @@ public:
     }
     
     ///@brief 返回世界坐标系到当前帧的变换Tcw
-    Eigen::Matrix4f GetPose() const{
+    cv::Mat GetPose() const{
+      
       cv::Mat OrbSLAMWorldToCurrFramePose = this->GetWorldToCurrFramePose();
-      return MatToEigen(OrbSLAMWorldToCurrFramePose);
+      return OrbSLAMWorldToCurrFramePose;
+    }
+    
+    ///@brief 得到OrbSLAM此时的跟踪状态,跟踪状态为2时为跟踪成功
+    int GetOrbSlamTrackingState() const {
+       return this->GetTrackingState();
     }
     
     ///@brief 获取俩帧之前的相对位置

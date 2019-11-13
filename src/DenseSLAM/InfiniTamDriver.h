@@ -199,7 +199,6 @@ public:
     return this->settings;
   }
 
-  // 没有使用const，是因为‘ITMMainEngine’中的实现也没有使用const
   void GetImage(
       ITMUChar4Image *out,
       SparsetoDense::PreviewType get_image_type,
@@ -211,19 +210,7 @@ public:
       SparsetoDense::PreviewType get_image_type,
       const pangolin::OpenGlMatrix &model_view = pangolin::IdentityMatrix()
   );
-
-  /// \brief Returns the RGB "seen" by this particular InfiniTAM instance.
-  /// This may not be the full original RGB frame due to, e.g., masking.
-  const cv::Mat3b* GetRgbPreview() const {
-    return rgb_cv_;
-  }
-
-  /// \brief Returns the depth "seen" by this particular InfiniTAM instance.
-  /// This may not be the full original depth frame due to, e.g., masking.
-  const cv::Mat1s* GetDepthPreview() const {
-     return raw_depth_cv_;
-  }
-
+  
   /// @brief 返回世界坐标系到当前帧的变换，Tw->c,the transform from world to current
   Eigen::Matrix4f GetPose() const{
       /// 得到主子地图到

@@ -5,7 +5,7 @@
 namespace SparsetoDense {
 
 enum PreviewType {
-  kDepth, kGray, kColor, kNormal, kWeight, kLatestRaycast, kRaycastDepth, kEnd
+  kDepth, kGray, kColor, kNormal, kWeight, kRaycastImage, kLatestRaycast, kRaycastDepth, kEnd
 };
 
 } // namespace SparsetoDense

@@ -213,14 +213,15 @@ void PangolinGui::Run(){
 	//是否显示原来的图片预览
         if (display_raw_previews_->Get()) {
           UploadCvTexture(*(dense_slam_->GetRgbPreview()), *pane_texture_, true, GL_UNSIGNED_BYTE);
-        } else {
-	  //得到静态RGB图片的预览
-          UploadCvTexture(*(dense_slam_->GetStaticRgbPreview()), *pane_texture_, true, GL_UNSIGNED_BYTE); 
-        }
+        } 
+//         else {
+// 	  //得到静态RGB图片的预览
+//           UploadCvTexture(*(dense_slam_->GetStaticRgbPreview()), *pane_texture_, true, GL_UNSIGNED_BYTE); 
+//         }
         pane_texture_->RenderToViewport(true);
       }
       else if(dense_slam_->GetCurrentFrameNo() >= 1 && !dense_slam_->IsDynamicMode()){
-	cv::Mat im = dense_slam_->GetOrbSlamFrameDrawerGlobal()->DrawFrame();
+      cv::Mat im = dense_slam_->GetOrbSlamFrameDrawerGlobal()->DrawFrame();
 	UploadCvTexture(im, *pane_texture_, true, GL_UNSIGNED_BYTE);
 	pane_texture_->RenderToViewport(true);
       }
@@ -228,8 +229,7 @@ void PangolinGui::Run(){
       if (dense_slam_->GetCurrentFrameNo() > 1 && preview_sf_->Get()) {
           PreviewSparseSF(dense_slam_->GetLatestFlow().matches, rgb_view_);
       }
-      
-      
+        
       bool enable_compositing_dense = (paramGUI.evaluation_delay == 0);
       /// NOTE 激活depth_viewe_以进行绘制，对深度图进行显示
       depth_view_.Activate();
@@ -453,7 +453,7 @@ void PangolinGui::CreatePangolinDisplays(){
 
     //保存静态地图，即没有运动中的物体
     auto save_map = [this]() {
-      Tic("Static map mesh generation");
+      Tic("Dense map mesh generation");
       if (dense_slam_->GetCurrentFrameNo() < 2) {
         cerr << "Warning: no map to save!" << endl;
       }
@@ -465,8 +465,9 @@ void PangolinGui::CreatePangolinDisplays(){
       }
     };
 
-    pangolin::Var<function<void(void)>> save_map_button("ui.[S]ave Static Map", save_map);
+    pangolin::Var<function<void(void)>> save_map_button("ui.[S]ave Dense and Sparse Map ", save_map);
     pangolin::RegisterKeyPressCallback('s', save_map);
+    
     
     auto ORB_SLAM2 = [this](){
       cout<< "the ORBSLAM has no integrate to this system yet"<< endl;
@@ -659,6 +660,7 @@ void PangolinGui::CreatePangolinDisplays(){
     }
     //主要的一些细节部分
     detail_views_ = &(pangolin::Display("detail"));
+    detail_views_raycast = &(pangolin::Display("detail_raycast"));
 
     // Add labels to our data logs (and automatically to our plots).
     if(dense_slam_->IsDynamicMode()){

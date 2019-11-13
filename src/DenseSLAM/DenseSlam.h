@@ -70,12 +70,6 @@ class DenseSlam {
     return input_rgb_image_;
   }
 
-  /// \brief Returns an RGB preview of the static parts from the latest color frame.
-  /// \brief 返回最新帧静态部分的RGB预览
-  const cv::Mat3b* GetStaticRgbPreview() {
-    return static_scene_->GetRgbPreview();
-  }
-
   /// \brief Returns a preview of the latest depth frame.
   /// \brief 返回最新深度图的预览
   const cv::Mat1s* GetDepthPreview() {
@@ -224,6 +218,13 @@ private:
   int current_frame_no_;
   int input_width_;
   int input_height_;
+  
+  cv::Mat orbSLAM2_Pose; 
+  int orbSLAMTrackingState = 0;
+  
+  
+  bool external_odo = true;
+  bool useOrbSLAMVO = false;
 
   /// \brief Enables object-awareness, object reconstruction, etc. Without this, the system is
   ///        basically just outdoor InfiniTAM.

@@ -169,6 +169,7 @@ protected:
   pangolin::View *main_view_;
   pangolin::View *orbslam_view_;
   pangolin::View *detail_views_;
+  pangolin::View *detail_views_raycast;
   pangolin::View rgb_view_;
   pangolin::View depth_view_;
   pangolin::View raycast_depth_view_;
@@ -221,6 +222,7 @@ protected:
 
   int current_preview_type_ = PreviewType::kLatestRaycast;
   int current_preview_depth_type = PreviewType::kRaycastDepth;
+  int current_preview_rgb_type = PreviewType::kRaycastImage;
 
   int current_lidar_vis_ = VisualizeError::kNone;
 

@@ -71,35 +71,35 @@ void DenseSlam::ProcessFrame(Input *input) {
     /// 得到最新的位姿，相对于上一帧的位姿
     /// T_{current, previous} 
     Eigen::Matrix4f delta = sparse_sf_provider_->GetLatestMotion();
-
-    bool external_odo = false;
+    
+    /// 在orbSLAM这块，貌似位姿有点不对，还需要稍微改进下 
+    orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
     if (external_odo) {
-      //new_pose为当前帧到世界坐标系(第一帧)下的位姿变换
-      //Tcurrent_w = Tcurrent_previous * previous_w
-      Eigen::Matrix4f new_pose = delta * pose_history_[pose_history_.size() - 1]; 
-      
-      static_scene_->SetPose(new_pose.inverse());
-      pose_history_.push_back(new_pose);//将当前帧的位姿存储到vector中，方便下一次计算使用
+       if(useOrbSLAMVO){
+	 orbSLAM2_Pose = orbslam_static_scene_->GetPose();
+	 /// NOTE "2"意味着 OrbSLAM 跟踪成功
+	 if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
+	   static_scene_->SetPose(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
+	   pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
+	}
+       }
+       //使用光流进行跟踪
+       else{
+         //new_pose为当前帧到世界坐标系(第一帧)下的位姿变换
+         //Tcurrent_w = Tcurrent_previous * previous_w
+         Eigen::Matrix4f new_pose = delta * pose_history_[pose_history_.size() - 1];   
+         static_scene_->SetPose(new_pose.inverse());
+         pose_history_.push_back(new_pose);//将当前帧的位姿存储到vector中，方便下一次计算使用
+       }
     }
     else {
-      // Used when we're *not* computing VO as part of the SF estimation process.
       // Tcurrent_w = Tcurrent_previous * previous_w
-      Eigen::Matrix4f new_pose_sp = delta * pose_history_[pose_history_.size() - 1]; 
-      std::cout << SparsetoDense::EigenToItm(new_pose_sp.inverse())<<std::endl;
-      // new_pose_sp.inverse(): Tw_current
-//       std::cout << "new_pose: " << SparsetoDense::EigenToItm(new_pose_sp) << std::endl;
-      static_scene_->SetPose(new_pose_sp.inverse());
-//       std::cout << "new_pose_inv: " << SparsetoDense::EigenToItm(new_pose_sp.inverse()) << std::endl;
-
-      pose_history_.push_back(new_pose_sp);
-      
-//      将pose设置为单位阵，那么将一直在同一个地方上进行融合
-//       Eigen::Matrix4f identify_pose;
-//       identify_pose.setIdentity();
-//       static_scene_->SetPose(identify_pose);
-//       pose_history_.push_back(new_pose_sp);
-//       Eigen::Matrix4f get_pose = static_scene_->GetPose();
+       Eigen::Matrix4f new_pose_sp = delta * pose_history_[pose_history_.size() - 1]; 
+       // new_pose_sp.inverse(): Tw_current
+       static_scene_->SetPose(new_pose_sp.inverse());
+       pose_history_.push_back(new_pose_sp);
     }
+    
 
     if (! original_gray) {
       delete left_gray;
@@ -117,22 +117,28 @@ void DenseSlam::ProcessFrame(Input *input) {
   static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
   utils::Toc();
   
-  // Perform the tracking after the segmentation, so that we may in the future leverage semantic
-  // information to enhance tracking.
-//   if (! first_frame) {
-    if (current_frame_no_ % experimental_fusion_every_ == 0) {
-      utils::Tic("Static map fusion");
-      static_scene_->Integrate();
-      static_scene_->PrepareNextStep();
-      utils::TocMicro();
+  if(useOrbSLAMVO){
+      /// NOTE orbSLAMTrackingState == 2 意味着orbslam跟踪成功
+      if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
+         utils::Tic("Static map fusion");
+         static_scene_->Integrate();
+         static_scene_->PrepareNextStep();
+         utils::TocMicro();
 
-      // Idea: trigger decay not based on frame gap, but using translation-based threshold.
       // Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
-//       utils::Tic("Map decay");
-//       static_scene_->Decay();
-//       utils::TocMicro();
-    }
-//   }
+//    utils::Tic("Map decay");
+//    static_scene_->Decay();
+//    utils::TocMicro();
+      }
+  }
+   else{
+      if (current_frame_no_ % experimental_fusion_every_ == 0) {
+         utils::Tic("Static map fusion");
+         static_scene_->Integrate();
+         static_scene_->PrepareNextStep();
+         utils::TocMicro();
+      }
+   }
   
   // Final sanity check after the frame is processed: individual components should check for errors.
   // If something slips through and gets here, it's bad and we want to stop execution.
