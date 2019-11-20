@@ -229,13 +229,6 @@ void InfiniTamDriver::UpdateView(const cv::Mat3b &rgb_image,
                                  const cv::Mat1s &raw_depth_image) {
   CvToItm(rgb_image, rgb_itm_);
   CvToItm(raw_depth_image, raw_depth_itm_);
-
-  // * If 'view' is null, this allocates its RGB and depth buffers.
-  // * Afterwards, it converts the depth map we give it into a float depth map (we may be able to
-  //   skip this step in our case, since we have control over how our depth map is computed).
-  // * It then filters the shit out of the depth map (maybe we could skip this?) using five steps
-  //   of bilateral filtering.
-  // * Note: ITM internally uses ITMShortImages, so SIGNED short.
   
 //   for(int i=0; i<raw_depth_image.rows; i++){
 //     for(int j=0; j<raw_depth_image.cols; j++){

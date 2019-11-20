@@ -221,10 +221,6 @@ private:
   
   cv::Mat orbSLAM2_Pose; 
   int orbSLAMTrackingState = 0;
-  
-  
-  bool external_odo = true;
-  bool useOrbSLAMVO = false;
 
   /// \brief Enables object-awareness, object reconstruction, etc. Without this, the system is
   ///        basically just outdoor InfiniTAM.

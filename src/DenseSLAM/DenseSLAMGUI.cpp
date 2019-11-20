@@ -66,9 +66,6 @@ void PangolinGui::Run(){
       if (autoplay_->Get()) {
         if (paramGUI.frame_limit == 0 || dense_slam_->GetCurrentFrameNo() < paramGUI.frame_limit) {
           ProcessFrame();
-	  //cout<<dyn_slam_->GetDepthPreview()->clone()<<endl;
-	  dense_slam_->orbslam_static_scene_trackRGBD(dense_slam_->GetRgbPreview()->clone(),
-               dense_slam_->GetDepthPreview()->clone()/256.0, (double)dense_slam_->GetCurrentFrameNo());
         }
         else {
           cerr << "Warning: reached autoplay limit of [" << paramGUI.frame_limit << "]. Stopped."<< endl;
@@ -106,24 +103,9 @@ void PangolinGui::Run(){
       }
 
       int evaluated_frame_idx = dense_slam_->GetCurrentFrameNo() - 1 - paramGUI.evaluation_delay;
-      if (evaluated_frame_idx > 0) {
-        //auto velodyne = dyn_slam_->GetEvaluation()->GetVelodyneIO();
-//         int input_frame_idx = dense_slam_input_->GetFrameOffset() + evaluated_frame_idx;
-// 
-//         Eigen::Matrix4f epose = dense_slam_->GetPoseHistory()[evaluated_frame_idx + 1];
-//         auto pango_pose = pangolin::OpenGlMatrix::ColMajor4x4(epose.data());
-// 
+      if (evaluated_frame_idx > 0) { 
+	
         bool enable_compositing = (paramGUI.evaluation_delay == 0);
-// 	
-// 	/// NOTE 通过模型光线投影回来的深度图
-// // 	const unsigned char *synthesized_depthmap = nullptr;
-// //         synthesized_depthmap = dense_slam_->GetStaticMapRaycastDepthPreview(pango_pose, enable_compositing);
-//         auto input_depthmap = shared_ptr<cv::Mat1s>(nullptr);
-//         auto input_rgb = shared_ptr<cv::Mat3b>(nullptr);
-//         dense_slam_input_->GetFrameCvImages(input_frame_idx, input_rgb, input_depthmap);
-// 
-//         /// Result of diffing our disparity maps (input and synthesized).
-//         uchar diff_buffer[width_ * height_ * 4];
 // 	//void* memset(void *str, int c, size_t n)复制字符c(一个无符号字符)到参数str所指向的字符串的前n个字符
 // 	//diff_buffer为要填充的内存块，‘\0’为要被设置的值，sizeof(uchar)*width_*height_*4为要被设置为该值的字节数
 //         memset(diff_buffer, '\0', sizeof(uchar) * width_ * height_ * 4);
@@ -141,40 +123,12 @@ void PangolinGui::Run(){
               message = "Free cam preview";
             }
             preview = dense_slam_->GetMapRaycastPreview(pane_cam_->GetModelViewMatrix(),
-//                  pango_pose,
                   static_cast<PreviewType>(current_preview_type_),
 		  enable_compositing);
 	    pane_texture_->Upload(preview, GL_RGBA, GL_UNSIGNED_BYTE);
             pane_texture_->RenderToViewport(true);
             DrawPose(time_ms);
             break;
-
-//           case kInputVsLidar:
-//             message = utils::Format("Input depth vs. LIDAR | delta_max = %d", delta_max_visualization);
-//             need_lidar = true;
-//             UploadCvTexture(*input_depthmap, *pane_texture_, false, GL_SHORT);
-//             break;
-// 
-//           case kFusionVsLidar:
-//             message = utils::Format("Fused map vs. LIDAR | delta_max = %d", delta_max_visualization);
-//             need_lidar = true;
-//             FloatDepthmapToShort(synthesized_depthmap, depth_preview_buffer_);
-//             UploadCvTexture(depth_preview_buffer_, *pane_texture_, false, GL_SHORT);
-//             break;
-// 
-//           case kInputVsFusion:
-//             message = "Input depth vs. fusion (green = OK, yellow = input disp > fused, cyan = input disp < fused";
-//             DiffDepthmaps(*input_depthmap, synthesized_depthmap, width_, height_,
-//                           delta_max_visualization, diff_buffer, dense_slam_->GetStereoBaseline(),
-//                           dense_slam_->GetLeftRgbProjectionMatrix()(0, 0));
-//             pane_texture_->Upload(diff_buffer, GL_RGBA, GL_UNSIGNED_BYTE);
-//             pane_texture_->RenderToViewport(true);
-//             break;
-// 
-//           default:
-//           case kEnd:
-//             throw runtime_error("Unexpected 'current_lidar_vis_' error visualization mode.");
-//             break;
          }
          // Ensures we have a blank slate for the pane's overlay text.
         glMatrixMode(GL_PROJECTION);
@@ -476,23 +430,6 @@ void PangolinGui::CreatePangolinDisplays(){
     pangolin::RegisterKeyPressCallback('b', ORB_SLAM2);
     
     NumLocalMap = new pangolin::Var<string>("ui.Number of Submap: ", "");
-//     pangolin::Var<function<void(void)>> previous_object("ui.Previous Object [z]", [this]() {
-//       SelectPreviousVisualizedObject();
-//     });
-//     pangolin::RegisterKeyPressCallback('z', [this]() { SelectPreviousVisualizedObject(); });
-    
-    
-//     pangolin::Var<function<void(void)>> next_object("ui.Ne[x]t Object", [this]() {
-//       SelectNextVisualizedObject();
-//     });
-//     pangolin::RegisterKeyPressCallback('x', [this]() { SelectNextVisualizedObject(); });
-//     auto save_object = [this]() {
-//       dyn_slam_->SaveDynamicObject(dyn_slam_input_->GetDatasetIdentifier(),
-//                                      dyn_slam_input_->GetDepthProvider()->GetName(),
-//                                      visualized_object_idx_);
-//     };
-//     pangolin::Var<function<void(void)>> save_active_object("ui.Save Active [O]bject", save_object);
-//     pangolin::RegisterKeyPressCallback('o', save_object);
 
     auto quit = [this]() {
 //       dense_slam_->WaitForJobs();
@@ -714,28 +651,14 @@ void PangolinGui::CreatePangolinDisplays(){
 }
 
 void PangolinGui::ProcessFrame(){
-        cout << endl << "[Starting frame " << dense_slam_->GetCurrentFrameNo() + 1 << "]" << endl;
-//   active_object_count_ = dyn_slam_->GetInstanceReconstructor()->GetActiveTrackCount();
-
+    cout << endl << "[Starting frame " << dense_slam_->GetCurrentFrameNo() + 1 << "]" << endl;
+    
     if (! dense_slam_input_->HasMoreImages() && paramGUI.close_on_complete) {
-      cerr << "No more images, and I'm instructed to shut down when that happens. Bye!" << endl;
+      cerr << "No more images, Bye!" << endl;
       pangolin::QuitAll();
       return;
     }
-
-    size_t free_gpu_memory_bytes;
-    size_t total_gpu_memory_bytes;
-    cudaMemGetInfo(&free_gpu_memory_bytes, &total_gpu_memory_bytes);
-
-    const double kBytesToGb = 1.0 / 1024.0 / 1024.0 / 1024.0;
-    double free_gpu_gb = static_cast<float>(free_gpu_memory_bytes) * kBytesToGb;
-//     data_log_.Log(
-// //        active_object_count_,
-//         static_cast<float>(free_gpu_gb) * 10.0f,   // Mini-hack to make the scales better
-//         dense_slam_->GetStaticMapMemoryBytes() * 10.0f * kBytesToGb,
-//         (dense_slam_->GetStaticMapMemoryBytes() + dense_slam_->GetStaticMapSavedDecayMemoryBytes()) * 10.0f * kBytesToGb
-//     );
-
+    
     Tic("DynSLAM frame");
     // Main workhorse function of the underlying SLAM system.
     dense_slam_->ProcessFrame(this->dense_slam_input_);

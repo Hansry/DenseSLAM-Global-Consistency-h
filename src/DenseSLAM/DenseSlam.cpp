@@ -7,6 +7,8 @@
 DEFINE_bool(dynamic_weights, false, "Whether to use depth-based weighting when performing fusion.");
 DECLARE_bool(semantic_evaluation);
 DECLARE_int32(evaluation_delay);
+DEFINE_bool(external_odo, true, "Whether to use external VO");
+DEFINE_bool(useOrbSLAMVO, false, "Whether to use OrbSLAM VO");
 
 namespace SparsetoDense {
 
@@ -16,17 +18,49 @@ void DenseSlam::ProcessFrame(Input *input) {
     cout << "No more frames left in image source." << endl;
     return;
   }
-
+  
   bool first_frame = (current_frame_no_ == 0);
-
+      
   utils::Tic("Read input and compute depth");
   if(!input->ReadNextFrame()) {
     throw runtime_error("Could not read input from the data source.");
   }
   utils::Toc();
+  
+  utils::Tic("Input preprocessing");
+  input->GetCvImages(&input_rgb_image_, &input_raw_depth_image_);
+  static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
+  utils::Toc();
 
-  /// \brief 利用左右图像计算稀疏场景光流
-  future<void> ssf_and_vo = async(launch::async, [this, &input, &first_frame] {
+  /// @brief 对orbslam进行跟踪，同时进行线程的分离
+  future<void> orbslamVO = async(launch::async, [this, &input]{
+  
+  cv::Mat orbSLAMInputDepth(input_raw_depth_image_->rows, input_raw_depth_image_->cols, CV_32FC1);
+  for(int row =0; row<input_rgb_image_->rows; row++){
+    for(int col =0; col<input_rgb_image_->cols; col++){
+      orbSLAMInputDepth.at<float>(row,col) = (float)input_raw_depth_image_->at<ushort>(row,col)/1000.0;
+    }
+  }
+  orbslam_static_scene_trackRGBD(*input_rgb_image_, 
+				 orbSLAMInputDepth, 
+				 (double)current_frame_no_);
+  });  
+  /// @brief 利用左右图像计算稀疏场景光流
+  if(FLAGS_external_odo){
+  /// 使用ORBSLAM的里程计
+  if(FLAGS_useOrbSLAMVO){
+    orbslamVO.get();
+    orbSLAM2_Pose = orbslam_static_scene_->GetPose();
+    orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
+    /// NOTE "2"意味着 OrbSLAM 跟踪成功
+    if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
+	   static_scene_->SetPose(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
+	   pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
+	}
+  }
+  else{
+    ///使用双目光流计算出来的里程计
+    future<void> ssf_and_vo = async(launch::async, [this, &input, &first_frame] {
     utils::Tic("Sparse Scene Flow");
 
     // Whether to use input from the original cameras. Unavailable with the tracking dataset.
@@ -52,12 +86,7 @@ void DenseSlam::ProcessFrame(Input *input) {
       cv::cvtColor(*left_col, *left_gray, cv::COLOR_RGB2GRAY);
       cv::cvtColor(*right_col, *right_gray, cv::COLOR_RGB2GRAY);
     }
-
-    // TODO(andrei): Idea: compute only matches here, the make the instance reconstructor process
-    // the frame and remove clearly-dynamic SF vectors (e.g., from tracks which are clearly dynamic,
-    // as marked from a prev frame), before computing the egomotion, and then processing the
-    // reconstructions. This may improve VO accuracy, and it could give us an excuse to also
-    // evaluate ATE and compare it with the results from e.g., StereoScan, woo!
+    
     sparse_sf_provider_->ComputeSparseSF(
         make_pair((cv::Mat1b *) nullptr, (cv::Mat1b *) nullptr),
         make_pair(left_gray, right_gray)
@@ -71,36 +100,15 @@ void DenseSlam::ProcessFrame(Input *input) {
     /// 得到最新的位姿，相对于上一帧的位姿
     /// T_{current, previous} 
     Eigen::Matrix4f delta = sparse_sf_provider_->GetLatestMotion();
-    
-    /// 在orbSLAM这块，貌似位姿有点不对，还需要稍微改进下 
-    orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
-    if (external_odo) {
-       if(useOrbSLAMVO){
-	 orbSLAM2_Pose = orbslam_static_scene_->GetPose();
-	 /// NOTE "2"意味着 OrbSLAM 跟踪成功
-	 if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
-	   static_scene_->SetPose(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
-	   pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
-	}
-       }
-       //使用光流进行跟踪
-       else{
-         //new_pose为当前帧到世界坐标系(第一帧)下的位姿变换
-         //Tcurrent_w = Tcurrent_previous * previous_w
-         Eigen::Matrix4f new_pose = delta * pose_history_[pose_history_.size() - 1];   
-         static_scene_->SetPose(new_pose.inverse());
-         pose_history_.push_back(new_pose);//将当前帧的位姿存储到vector中，方便下一次计算使用
-       }
-    }
-    else {
-      // Tcurrent_w = Tcurrent_previous * previous_w
-       Eigen::Matrix4f new_pose_sp = delta * pose_history_[pose_history_.size() - 1]; 
-       // new_pose_sp.inverse(): Tw_current
-       static_scene_->SetPose(new_pose_sp.inverse());
-       pose_history_.push_back(new_pose_sp);
-    }
-    
 
+    //使用光流进行跟踪
+    //new_pose为当前帧到世界坐标系(第一帧)下的位姿变换
+    //Tcurrent_w = Tcurrent_previous * previous_w
+    Eigen::Matrix4f new_pose = delta * pose_history_[pose_history_.size() - 1];
+    static_scene_->SetPose(new_pose.inverse());
+    pose_history_.push_back(new_pose);//将当前帧的位姿存储到vector中，方便下一次计算使用
+
+    
     if (! original_gray) {
       delete left_gray;
       delete right_gray;
@@ -108,16 +116,21 @@ void DenseSlam::ProcessFrame(Input *input) {
     utils::Toc("Visual Odometry", false);
   });
 
-//  seg_result_future.wait();
-// 'get' ensures any exceptions are propagated (unlike 'wait').
-  ssf_and_vo.get();
-  
-  utils::Tic("Input preprocessing");
-  input->GetCvImages(&input_rgb_image_, &input_raw_depth_image_);
-  static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
-  utils::Toc();
-  
-  if(useOrbSLAMVO){
+    ssf_and_vo.get();
+  }
+  }
+  /// 使用内部使用的里程计，目前还没有写好
+  else{
+     orbslamVO.get();
+     orbSLAM2_Pose = orbslam_static_scene_->GetPose();
+     orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
+     /// NOTE "2"意味着 OrbSLAM 跟踪成功
+     if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
+	   static_scene_->SetPose(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
+	   pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
+    }
+  }
+  if(FLAGS_useOrbSLAMVO){
       /// NOTE orbSLAMTrackingState == 2 意味着orbslam跟踪成功
       if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
          utils::Tic("Static map fusion");
@@ -125,12 +138,12 @@ void DenseSlam::ProcessFrame(Input *input) {
          static_scene_->PrepareNextStep();
          utils::TocMicro();
 
-      // Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
+//    Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
 //    utils::Tic("Map decay");
 //    static_scene_->Decay();
 //    utils::TocMicro();
-      }
-  }
+       }
+    }
    else{
       if (current_frame_no_ % experimental_fusion_every_ == 0) {
          utils::Tic("Static map fusion");
@@ -139,17 +152,7 @@ void DenseSlam::ProcessFrame(Input *input) {
          utils::TocMicro();
       }
    }
-  
-  // Final sanity check after the frame is processed: individual components should check for errors.
-  // If something slips through and gets here, it's bad and we want to stop execution.
-//   ITMSafeCall(cudaDeviceSynchronize());
-//   cudaError_t last_error = cudaGetLastError();
-//   if (last_error != cudaSuccess) {
-//     cerr << "A CUDA error slipped by undetected from a component of DynSLAM!" << endl;
-// 
-//     // Trigger the regular error response.
-//     ITMSafeCall(last_error);
-//   }
+   
 //   std::cout << "the number of active map: "<< static_scene_->GetLocalActiveMapNumber()<<std::endl; 
 //   std::cout << "the number of map: " << static_scene_->GetMapNumber()<<std::endl;
   current_frame_no_++;
