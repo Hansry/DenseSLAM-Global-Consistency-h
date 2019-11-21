@@ -148,8 +148,7 @@ public:
   // this->GetTrackingState()也是对primary local map而言的
   // 在这里，我们认为new_pose是基于世界坐标系而言的
   void SetPose(const Eigen::Matrix4f &new_pose) {
-    //const ITMLocalMap* primaryLocalMap = this->GetPrimaryLocalMap();
-    const ITMLocalMap* primaryLocalMap = this->SpecificLocalMap;
+    const ITMLocalMap* primaryLocalMap = this->GetPrimaryLocalMap();
     SetPoseLocalMap(primaryLocalMap, new_pose);
   }
   
@@ -162,8 +161,7 @@ public:
 
   /// @brief 融合主局部地图
   void Integrate() const{ 
-      //ITMLocalMap* primaryLocalMap = this->GetPrimaryLocalMap();
-      const ITMLocalMap* primaryLocalMap = this->SpecificLocalMap;
+      ITMLocalMap* primaryLocalMap = this->GetPrimaryLocalMap();
       IntegrateLocalMap(primaryLocalMap);
   }
   
@@ -176,8 +174,7 @@ public:
 
   /// @brief 对于主局部地图而言，调用了PrepareNextStepLocalMap
   void PrepareNextStep() {
-  //    ITMLocalMap* PrimaryLocalMap = GetPrimaryLocalMap();
-      const ITMLocalMap* PrimaryLocalMap = this->SpecificLocalMap;
+     ITMLocalMap* PrimaryLocalMap = GetPrimaryLocalMap();
       PrepareNextStepLocalMap(PrimaryLocalMap);
   }
   
@@ -214,8 +211,7 @@ public:
   /// @brief 返回世界坐标系到当前帧的变换，Tw->c,the transform from world to current
   Eigen::Matrix4f GetPose() const{
       /// 得到主子地图到
-      /// const ITMLocalMap* PrimaryLocalMap = this->GetPrimaryLocalMap();
-      const ITMLocalMap* PrimaryLocalMap = this->SpecificLocalMap;
+      const ITMLocalMap* PrimaryLocalMap = this->GetPrimaryLocalMap();
       return GetLocalMapPose(PrimaryLocalMap);
   }
 
