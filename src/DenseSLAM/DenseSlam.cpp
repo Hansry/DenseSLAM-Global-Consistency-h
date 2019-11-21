@@ -13,18 +13,6 @@ DEFINE_bool(useOrbSLMKeyFrame, true, "Whether to use Keyframe strategy in ORB_SL
 
 namespace SparsetoDense {
 
-struct TodoListEntry {
-      TodoListEntry(int _activeDataID, bool _track, bool _fusion, bool _prepare)
-		: dataId(_activeDataID), track(_track), fusion(_fusion), prepare(_prepare), preprepare(false) {}
-      TodoListEntry(void) {}
-      //dataId为在active map中子地图的index
-      int dataId;
-      bool track;
-      bool fusion;
-      bool prepare;
-      bool preprepare;
-};
-
 void DenseSlam::ProcessFrame(Input *input) {
   // Read the images from the first part of the pipeline
   if (! input->HasMoreImages()) {
@@ -46,7 +34,6 @@ void DenseSlam::ProcessFrame(Input *input) {
 
   /// @brief 对orbslam进行跟踪，同时进行线程的分离
   future<void> orbslamVO = async(launch::async, [this, &input]{
-  
   cv::Mat orbSLAMInputDepth(input_raw_depth_image_->rows, input_raw_depth_image_->cols, CV_32FC1);
   for(int row =0; row<input_rgb_image_->rows; row++){
     for(int col =0; col<input_rgb_image_->cols; col++){
@@ -58,88 +45,91 @@ void DenseSlam::ProcessFrame(Input *input) {
 				 (double)current_frame_no_);
   });  
   
+  int primaryDataIdx = static_scene_->GetActivateDataManger()->findPrimaryDataIdx();
+  if(primaryDataIdx >= 0){
+    todoList.push_back(TodoListEntry(primaryDataIdx, true, true, true));
+  }
+  
+  int currentLocalMapIdx = static_scene_->GetActivateDataManger()->getLocalMapIndex(
+                                                        todoList[todoList.size()-1].dataId);
+  
+  currentLocalMap = static_scene_->GetMapManager()->getLocalMap(currentLocalMapIdx);
+  
   /// @brief 利用左右图像计算稀疏场景光流
   if(FLAGS_external_odo){
-  /// 使用ORBSLAM的里程计
-  if(FLAGS_useOrbSLAMVO){
-    orbslamVO.get();
-//     vector<ORB_SLAM2::KeyFrame*> vpKFs = GetOrbSlamKeyFrameDatabate();
-//     if(vpKFs.size()==0){
-//       current_frame_no_ ++;
-//       return;
-//     }
-    lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
-    if((int)lastKeyFrameTimeStamp != current_frame_no_){
-      current_frame_no_++;
-      return;
-    }
-    orbSLAM2_Pose = orbslam_static_scene_->GetPose();
-    orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
-    /// NOTE "2"意味着 OrbSLAM 跟踪成功
-    if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
-	   static_scene_->SetPose(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
-	   pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
-	}
-  }
-  else{
-    ///使用双目光流计算出来的里程计
-    future<void> ssf_and_vo = async(launch::async, [this, &input, &first_frame] {
-    utils::Tic("Sparse Scene Flow");
+    /// 使用ORBSLAM的里程计
+    if(FLAGS_useOrbSLAMVO){
+      orbslamVO.get();
+      lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
+      if((int)lastKeyFrameTimeStamp != current_frame_no_){
+        current_frame_no_++;
+        return;
+      }
+      orbSLAM2_Pose = orbslam_static_scene_->GetPose();
+      orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
+      /// NOTE "2"意味着 OrbSLAM 跟踪成功
+      if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
+	    static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
+	    pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
+	 }
+      }
+    else{
+      ///使用双目光流计算出来的里程计
+      future<void> ssf_and_vo = async(launch::async, [this, &input, &first_frame] {
+      utils::Tic("Sparse Scene Flow");
 
-    // Whether to use input from the original cameras. Unavailable with the tracking dataset.
-    // When original gray images are not used, the color ones are converted to grayscale and passed
-    // to the visual odometry instead.
-    bool original_gray = false;
+      // Whether to use input from the original cameras. Unavailable with the tracking dataset.
+      // When original gray images are not used, the color ones are converted to grayscale and passed
+      // to the visual odometry instead.
+      bool original_gray = false;
 
-    cv::Mat1b *left_gray;
-    cv::Mat1b *right_gray;
-    // 如果是灰度图直接计算光流
-    if (original_gray) {
-      input->GetCvStereoGray(&left_gray, &right_gray);
-    }
-    // 如果输入的是RGB，先转成灰度图再计算光流
-    else {
-      cv::Mat3b *left_col, *right_col;
-      input->GetCvStereoColor(&left_col, &right_col);
+      cv::Mat1b *left_gray;
+      cv::Mat1b *right_gray;
+      // 如果是灰度图直接计算光流
+      if (original_gray) {
+         input->GetCvStereoGray(&left_gray, &right_gray);
+      }
+      // 如果输入的是RGB，先转成灰度图再计算光流
+      else {
+        cv::Mat3b *left_col, *right_col;
+        input->GetCvStereoColor(&left_col, &right_col);
 
-      left_gray = new cv::Mat1b(left_col->rows, left_col->cols);
-      right_gray = new cv::Mat1b(right_col->rows, right_col->cols);
+        left_gray = new cv::Mat1b(left_col->rows, left_col->cols);
+        right_gray = new cv::Mat1b(right_col->rows, right_col->cols);
 
-      cv::cvtColor(*left_col, *left_gray, cv::COLOR_RGB2GRAY);
-      cv::cvtColor(*right_col, *right_gray, cv::COLOR_RGB2GRAY);
-    }
+        cv::cvtColor(*left_col, *left_gray, cv::COLOR_RGB2GRAY);
+        cv::cvtColor(*right_col, *right_gray, cv::COLOR_RGB2GRAY);
+      }
     
-    sparse_sf_provider_->ComputeSparseSF(
-        make_pair((cv::Mat1b *) nullptr, (cv::Mat1b *) nullptr),
-        make_pair(left_gray, right_gray)
-    );
-    if (!sparse_sf_provider_->FlowAvailable() && !first_frame) {
-      cerr << "Warning: could not compute scene flow." << endl;
-    }
-    utils::Toc("Sparse Scene Flow", false);
+      sparse_sf_provider_->ComputeSparseSF(
+         make_pair((cv::Mat1b *) nullptr, (cv::Mat1b *) nullptr),
+         make_pair(left_gray, right_gray)
+      );
+      if (!sparse_sf_provider_->FlowAvailable() && !first_frame) {
+         cerr << "Warning: could not compute scene flow." << endl;
+      }
+      utils::Toc("Sparse Scene Flow", false);
   
-    utils::Tic("Visual Odometry");
-    /// 得到最新的位姿，相对于上一帧的位姿
-    /// T_{current, previous} 
-    Eigen::Matrix4f delta = sparse_sf_provider_->GetLatestMotion();
+      utils::Tic("Visual Odometry");
+      /// 得到最新的位姿，相对于上一帧的位姿
+      /// T_{current, previous} 
+      Eigen::Matrix4f delta = sparse_sf_provider_->GetLatestMotion();
 
-    //使用光流进行跟踪
-    //new_pose为当前帧到世界坐标系(第一帧)下的位姿变换
-    //Tcurrent_w = Tcurrent_previous * previous_w
-    Eigen::Matrix4f new_pose = delta * pose_history_[pose_history_.size() - 1];
-    static_scene_->SetPose(new_pose.inverse());
-    pose_history_.push_back(new_pose);//将当前帧的位姿存储到vector中，方便下一次计算使用
+      //使用光流进行跟踪
+      //new_pose为当前帧到世界坐标系(第一帧)下的位姿变换
+      //Tcurrent_w = Tcurrent_previous * previous_w
+      Eigen::Matrix4f new_pose = delta * pose_history_[pose_history_.size() - 1];
+      static_scene_->SetPoseLocalMap(currentLocalMap, new_pose.inverse());
+      pose_history_.push_back(new_pose);//将当前帧的位姿存储到vector中，方便下一次计算使用
 
-    
-    if (! original_gray) {
-      delete left_gray;
-      delete right_gray;
+      if (! original_gray) {
+        delete left_gray;
+        delete right_gray;
+      }
+      utils::Toc("Visual Odometry", false);
+      });
+      ssf_and_vo.get();
     }
-    utils::Toc("Visual Odometry", false);
-  });
-
-    ssf_and_vo.get();
-  }
   }
   /// 使用内部使用的里程计，目前还没有写好
   else{
@@ -148,7 +138,7 @@ void DenseSlam::ProcessFrame(Input *input) {
      orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
      /// NOTE "2"意味着 OrbSLAM 跟踪成功
      if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
-	   static_scene_->SetPose(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
+	   static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
 	   pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
     }
   }
@@ -157,8 +147,8 @@ void DenseSlam::ProcessFrame(Input *input) {
       if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
          utils::Tic("Static map fusion");
 	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
-         static_scene_->Integrate();
-         static_scene_->PrepareNextStep();
+         static_scene_->IntegrateLocalMap(currentLocalMap);
+         static_scene_->PrepareNextStepLocalMap(currentLocalMap);
          utils::TocMicro();
 
 //    Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
@@ -171,8 +161,8 @@ void DenseSlam::ProcessFrame(Input *input) {
       if (current_frame_no_ % experimental_fusion_every_ == 0) {
          utils::Tic("Static map fusion");
 	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
-         static_scene_->Integrate();
-         static_scene_->PrepareNextStep();
+         static_scene_->IntegrateLocalMap(currentLocalMap);
+         static_scene_->PrepareNextStepLocalMap(currentLocalMap);
          utils::TocMicro();
       }
    }

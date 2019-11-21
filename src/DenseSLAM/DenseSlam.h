@@ -24,6 +24,19 @@ using namespace instreclib;
 // using namespace instreclib::segmentation;
 using namespace SparsetoDense::drivers;
 
+
+struct TodoListEntry {
+      TodoListEntry(int _activeDataID, bool _track, bool _fusion, bool _prepare)
+		: dataId(_activeDataID), track(_track), fusion(_fusion), prepare(_prepare), preprepare(false) {}
+      TodoListEntry(void) {}
+      //dataId为在active map中子地图的index
+      int dataId;
+      bool track;
+      bool fusion;
+      bool prepare;
+      bool preprepare;
+};
+
 // TODO(andrei): Get rid of ITM-specific image objects for visualization.
 /// \brief The central class of the DynSLAM system.
 /// It processes input stereo frames and generates separate maps for all encountered object
@@ -224,6 +237,8 @@ private:
 //   InstanceReconstructor *instance_reconstructor_;
   SparseSFProvider *sparse_sf_provider_;
 //   dynslam::eval::Evaluation *evaluation_;
+  
+  std::vector<TodoListEntry> todoList;
 
   ITMUChar4Image *out_image_;
   ITMFloatImage *out_image_float_;
@@ -237,6 +252,8 @@ private:
   cv::Mat orbSLAM2_Pose; 
   int orbSLAMTrackingState = 0;
   double lastKeyFrameTimeStamp = 0;
+  
+  ITMLib::Engine::ITMLocalMap* currentLocalMap = NULL;
 
   /// \brief Enables object-awareness, object reconstruction, etc. Without this, the system is
   ///        basically just outdoor InfiniTAM.

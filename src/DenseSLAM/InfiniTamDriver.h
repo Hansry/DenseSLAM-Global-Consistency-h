@@ -119,6 +119,14 @@ public:
 //                                                     const cv::Mat1s &raw_depth_image);
 
   // used by the instance reconstruction
+  ITMActiveMapManager* GetActivateDataManger() const {
+    return this->mActiveDataManger;
+  }
+  
+  ITMVoxelMapGraphManager* GetMapManager() const {
+    return this->mapManager;
+  }
+  
   void SetView(ITMLib::Objects::ITMView *view) {
     this->view = view;
   }
