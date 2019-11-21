@@ -464,11 +464,6 @@ void PangolinGui::CreatePangolinDisplays(){
       }
     });
 
-//     pangolin::Var<function<void(void)>> collect("ui.Map Voxel [G]C Catchup", [&]() {
-//       dense_slam_->StaticMapDecayCatchup();
-//     });
-//     pangolin::RegisterKeyPressCallback('g', [&]() { dense_slam_->StaticMapDecayCatchup(); });
-
     /***************************************************************************
      * GUI Checkboxes
      **************************************************************************/
