@@ -58,21 +58,17 @@ void DenseSlam::ProcessFrame(Input *input) {
 				 (double)current_frame_no_);
   });  
   
-  
   /// @brief 利用左右图像计算稀疏场景光流
   if(FLAGS_external_odo){
   /// 使用ORBSLAM的里程计
   if(FLAGS_useOrbSLAMVO){
     orbslamVO.get();
-    vector<ORB_SLAM2::KeyFrame*> vpKFs = GetOrbSlamKeyFrameDatabate();
-    if(vpKFs.size()==0){
-      current_frame_no_ ++;
-      return;
-    }
+//     vector<ORB_SLAM2::KeyFrame*> vpKFs = GetOrbSlamKeyFrameDatabate();
+//     if(vpKFs.size()==0){
+//       current_frame_no_ ++;
+//       return;
+//     }
     lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
-    std::cout << "current_frame_no_: " << current_frame_no_ << std::endl;
-    std::cout << "lastKeyFrameTimeStamp: " << lastKeyFrameTimeStamp << std::endl;
-    
     if((int)lastKeyFrameTimeStamp != current_frame_no_){
       current_frame_no_++;
       return;
@@ -181,8 +177,6 @@ void DenseSlam::ProcessFrame(Input *input) {
       }
    }
    
-  std::cout << "the number of active map: "<< static_scene_->GetLocalActiveMapNumber()<<std::endl; 
-  std::cout << "the number of map: " << static_scene_->GetMapNumber()<<std::endl;
   current_frame_no_++;
 }
 

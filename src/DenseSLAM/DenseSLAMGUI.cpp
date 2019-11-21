@@ -236,7 +236,12 @@ void PangolinGui::Run(){
         pane_texture_dense_->RenderToViewport(true);
         
       }
-
+      
+      *(NumFrame) = Format("%d", dense_slam_->GetCurrentFrameNo());
+      *(NumKeyFrame) = Format("%d", dense_slam_->GetKeyFrameNum());
+      *(NumActiveLocalMap) = Format("%d", dense_slam_->GetNumActiveLocalMap());
+      *(NumLocalMap) = Format("%d", dense_slam_->GetNumLocalMap());
+      
       // Swap frames and Process Events
       pangolin::FinishFrame();
 
@@ -429,7 +434,11 @@ void PangolinGui::CreatePangolinDisplays(){
     pangolin::Var<function<void(void)>> orb_slam2_button("ui.or[B] slam", ORB_SLAM2);
     pangolin::RegisterKeyPressCallback('b', ORB_SLAM2);
     
-    NumLocalMap = new pangolin::Var<string>("ui.Number of Submap: ", "");
+    NumLocalMap = new pangolin::Var<string>("ui.Number of Submaps: ", "");
+    NumActiveLocalMap = new pangolin::Var<string>("ui.Number of Active Submaps: ", "");
+    
+    NumFrame = new pangolin::Var<string>("ui.Number of Frames: ", "");
+    NumKeyFrame = new pangolin::Var<string>("ui.Number of KeyFrames: ", "");
 
     auto quit = [this]() {
 //       dense_slam_->WaitForJobs();

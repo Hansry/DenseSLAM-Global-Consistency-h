@@ -204,6 +204,17 @@ class DenseSlam {
      return orbslam_static_scene_->GetTracker();
   }
   
+  int GetNumLocalMap() const {
+    return static_scene_->GetMapNumber();
+  }
+  
+  int GetNumActiveLocalMap() const {
+    return static_scene_->GetLocalActiveMapNumber();
+  }
+  
+  int GetKeyFrameNum() const {
+    return orbslam_static_scene_->GetOrbSlamMapDrawer()->mpMap->GetAllKeyFrames().size();
+  }
   SUPPORT_EIGEN_FIELDS;
 
 private:
