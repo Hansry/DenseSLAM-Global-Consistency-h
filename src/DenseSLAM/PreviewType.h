@@ -1,6 +1,6 @@
 
-#ifndef DYNSLAM_PREVIEWTYPE_H
-#define DYNSLAM_PREVIEWTYPE_H
+#ifndef DENSESLAM_PREVIEWTYPE_H
+#define DENSESLAM_PREVIEWTYPE_H
 
 namespace SparsetoDense {
 
@@ -10,4 +10,4 @@ enum PreviewType {
 
 } // namespace SparsetoDense
 
-#endif //DYNSLAM_PREVIEWTYPE_H
+#endif //DENSESLAM_PREVIEWTYPE_H

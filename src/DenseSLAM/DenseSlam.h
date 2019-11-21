@@ -196,6 +196,10 @@ class DenseSlam {
      return orbslam_static_scene_->GetOrbSlamFrameDrawer();
   }
   
+  vector<ORB_SLAM2::KeyFrame*> GetOrbSlamKeyFrameDatabate() const {
+     return orbslam_static_scene_->GetOrbSlamMapDrawer()->mpMap->GetAllKeyFrames();
+  }
+  
   ORB_SLAM2::Tracking* GetOrbSlamTrackerGlobal() const{
      return orbslam_static_scene_->GetTracker();
   }
@@ -221,6 +225,7 @@ private:
   
   cv::Mat orbSLAM2_Pose; 
   int orbSLAMTrackingState = 0;
+  double lastKeyFrameTimeStamp = 0;
 
   /// \brief Enables object-awareness, object reconstruction, etc. Without this, the system is
   ///        basically just outdoor InfiniTAM.

@@ -1,6 +1,6 @@
 
-#ifndef DYNSLAM_DEPTHPROVIDER_H
-#define DYNSLAM_DEPTHPROVIDER_H
+#ifndef DENSESLAM_DEPTHPROVIDER_H
+#define DENSESLAM_DEPTHPROVIDER_H
 
 #include <limits>
 
@@ -184,4 +184,4 @@ class DepthProvider {
 
 } // namespace SparsetoDense
 
-#endif //DYNSLAM_DEPTHPROVIDER_H
+#endif //DENSESLAM_DEPTHPROVIDER_H

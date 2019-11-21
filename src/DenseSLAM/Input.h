@@ -1,6 +1,6 @@
 
-#ifndef DYNSLAM_INPUT_H
-#define DYNSLAM_INPUT_H
+#ifndef DENSESLAM_INPUT_H
+#define DENSESLAM_INPUT_H
 
 #include <string>
 #include <highgui.h>
@@ -287,4 +287,4 @@ class Input {
 
 } // namespace SparsetoDense
 
-#endif //DYNSLAM_INPUT_H
+#endif //DENSESLAM_INPUT_H

@@ -8,9 +8,22 @@ DEFINE_bool(dynamic_weights, false, "Whether to use depth-based weighting when p
 DECLARE_bool(semantic_evaluation);
 DECLARE_int32(evaluation_delay);
 DEFINE_bool(external_odo, true, "Whether to use external VO");
-DEFINE_bool(useOrbSLAMVO, false, "Whether to use OrbSLAM VO");
+DEFINE_bool(useOrbSLAMVO, true, "Whether to use OrbSLAM VO");
+DEFINE_bool(useOrbSLMKeyFrame, true, "Whether to use Keyframe strategy in ORB_SLAM2");
 
 namespace SparsetoDense {
+
+struct TodoListEntry {
+      TodoListEntry(int _activeDataID, bool _track, bool _fusion, bool _prepare)
+		: dataId(_activeDataID), track(_track), fusion(_fusion), prepare(_prepare), preprepare(false) {}
+      TodoListEntry(void) {}
+      //dataId为在active map中子地图的index
+      int dataId;
+      bool track;
+      bool fusion;
+      bool prepare;
+      bool preprepare;
+};
 
 void DenseSlam::ProcessFrame(Input *input) {
   // Read the images from the first part of the pipeline
@@ -29,7 +42,6 @@ void DenseSlam::ProcessFrame(Input *input) {
   
   utils::Tic("Input preprocessing");
   input->GetCvImages(&input_rgb_image_, &input_raw_depth_image_);
-  static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
   utils::Toc();
 
   /// @brief 对orbslam进行跟踪，同时进行线程的分离
@@ -45,11 +57,26 @@ void DenseSlam::ProcessFrame(Input *input) {
 				 orbSLAMInputDepth, 
 				 (double)current_frame_no_);
   });  
+  
+  
   /// @brief 利用左右图像计算稀疏场景光流
   if(FLAGS_external_odo){
   /// 使用ORBSLAM的里程计
   if(FLAGS_useOrbSLAMVO){
     orbslamVO.get();
+    vector<ORB_SLAM2::KeyFrame*> vpKFs = GetOrbSlamKeyFrameDatabate();
+    if(vpKFs.size()==0){
+      current_frame_no_ ++;
+      return;
+    }
+    lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
+    std::cout << "current_frame_no_: " << current_frame_no_ << std::endl;
+    std::cout << "lastKeyFrameTimeStamp: " << lastKeyFrameTimeStamp << std::endl;
+    
+    if((int)lastKeyFrameTimeStamp != current_frame_no_){
+      current_frame_no_++;
+      return;
+    }
     orbSLAM2_Pose = orbslam_static_scene_->GetPose();
     orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
     /// NOTE "2"意味着 OrbSLAM 跟踪成功
@@ -68,7 +95,6 @@ void DenseSlam::ProcessFrame(Input *input) {
     // to the visual odometry instead.
     bool original_gray = false;
 
-    // TODO-LOW(andrei): Reuse these buffers for performance.
     cv::Mat1b *left_gray;
     cv::Mat1b *right_gray;
     // 如果是灰度图直接计算光流
@@ -134,6 +160,7 @@ void DenseSlam::ProcessFrame(Input *input) {
       /// NOTE orbSLAMTrackingState == 2 意味着orbslam跟踪成功
       if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
          utils::Tic("Static map fusion");
+	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
          static_scene_->Integrate();
          static_scene_->PrepareNextStep();
          utils::TocMicro();
@@ -147,14 +174,15 @@ void DenseSlam::ProcessFrame(Input *input) {
    else{
       if (current_frame_no_ % experimental_fusion_every_ == 0) {
          utils::Tic("Static map fusion");
+	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
          static_scene_->Integrate();
          static_scene_->PrepareNextStep();
          utils::TocMicro();
       }
    }
    
-//   std::cout << "the number of active map: "<< static_scene_->GetLocalActiveMapNumber()<<std::endl; 
-//   std::cout << "the number of map: " << static_scene_->GetMapNumber()<<std::endl;
+  std::cout << "the number of active map: "<< static_scene_->GetLocalActiveMapNumber()<<std::endl; 
+  std::cout << "the number of map: " << static_scene_->GetMapNumber()<<std::endl;
   current_frame_no_++;
 }
 

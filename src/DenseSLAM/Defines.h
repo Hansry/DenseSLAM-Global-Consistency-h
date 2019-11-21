@@ -1,6 +1,6 @@
 
-#ifndef DYNSLAM_DSDEFINES_H
-#define DYNSLAM_DSDEFINES_H
+#ifndef DENSESLAM_DEFINES_H
+#define DENSESLAM_DEFINES_H
 
 #include <Eigen/Core>
 
@@ -14,4 +14,4 @@ namespace Eigen {
   using Matrix34f = Matrix<float, 3, 4>;
 }
 
-#endif //DYNSLAM_DSDEFINES_H
+#endif //DENSESLAM_DEFINES_H

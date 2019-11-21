@@ -1,5 +1,5 @@
-#ifndef DYNSLAM_DYNSLAMGUI_H
-#define DYNSLAM_DYNSLAMGUI_H
+#ifndef DENSESLAM_DENSESLAMGUI_H
+#define DENSESLAM_DENSESLAMGUI_H
 
 #include <atomic>
 #include <chrono>

@@ -1,5 +1,5 @@
-#ifndef DYNSLAM_UTILS_H
-#define DYNSLAM_UTILS_H
+#ifndef DENSESLAM_UTILS_H
+#define DENSESLAM_UTILS_H
 
 #include <cmath>
 #include <map>
@@ -272,5 +272,5 @@ Eigen::Vector2f PixelsToGl(const Eigen::Vector2f &px, const Eigen::Vector2f &px_
 } // namespace utils
 } // namespace SparsetoDense
 
-#endif //DYNSLAM_UTILS_H
+#endif //DENSESLAM_UTILS_H
 
