@@ -197,9 +197,11 @@ protected:
   pangolin::GlTexture *pane_texture_dense_;
 
   pangolin::Var<string> *NumLocalMap;
-  pangolin::Var<string> *NumActiveLocalMap;
+//   pangolin::Var<string> *NumActiveLocalMap;
   pangolin::Var<string> *NumFrame;
   pangolin::Var<string> *NumKeyFrame;
+  pangolin::Var<string> *CurrentLocalMapStartKeyframeNo;
+  pangolin::Var<string> *CurrentLocalMapEndKeyframeNo;
 
   // Atomic because it gets set from a UI callback. Technically, Pangolin shouldn't invoke callbacks
   // from a different thread, but using atomics for this is generally a good practice anyway.

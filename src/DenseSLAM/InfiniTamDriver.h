@@ -207,13 +207,15 @@ public:
   void GetImage(
       ITMUChar4Image *out,
       SparsetoDense::PreviewType get_image_type,
-      const pangolin::OpenGlMatrix &model_view = pangolin::IdentityMatrix()
+      const pangolin::OpenGlMatrix &model_view = pangolin::IdentityMatrix(),
+      const ITMLocalMap *currentLocalMap = nullptr
   );
 
   void GetFloatImage(
       ITMFloatImage *out,
       SparsetoDense::PreviewType get_image_type,
-      const pangolin::OpenGlMatrix &model_view = pangolin::IdentityMatrix()
+      const pangolin::OpenGlMatrix &model_view = pangolin::IdentityMatrix(),
+      const ITMLocalMap *currentLocalMap = nullptr
   );
   
   /// @brief 返回世界坐标系到当前帧的变换，Tw->c,the transform from world to current
@@ -242,6 +244,7 @@ public:
   int GetMapNumber() const {
      return this->mapManager->numLocalMaps();
   }
+  
 
   /// \brief Regularizes the map by pruning low-weight voxels which are old enough.
   /// Very useful for, e.g., reducing artifacts caused by noisy depth maps.

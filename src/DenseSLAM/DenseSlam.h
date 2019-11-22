@@ -26,15 +26,15 @@ using namespace SparsetoDense::drivers;
 
 
 struct TodoListEntry {
-      TodoListEntry(int _activeDataID, bool _track, bool _fusion, bool _prepare)
-		: dataId(_activeDataID), track(_track), fusion(_fusion), prepare(_prepare), preprepare(false) {}
+      TodoListEntry(int _MapDataID, int startTimeStamp, int endTimeStamp)
+		: dataId(_MapDataID), 
+		startKeyframeTimeStamp(startTimeStamp), 
+		endKeyframeTimeStamp(endTimeStamp){}
       TodoListEntry(void) {}
-      //dataId为在active map中子地图的index
+      //dataId为在localmap中子地图的index
       int dataId;
-      bool track;
-      bool fusion;
-      bool prepare;
-      bool preprepare;
+      int startKeyframeTimeStamp;
+      int endKeyframeTimeStamp;
 };
 
 // TODO(andrei): Get rid of ITM-specific image objects for visualization.
@@ -70,8 +70,9 @@ class DenseSlam {
       projection_left_rgb_(proj_left_rgb),
       projection_right_rgb_(proj_right_rgb),
       stereo_baseline_m_(stereo_baseline_m),
-      experimental_fusion_every_(fusion_every)
-  {}
+      experimental_fusion_every_(fusion_every) 
+  {
+  }
 
   /// \brief Reads in and processes the next frame from the data source.
   /// This is where most of the interesting stuff happens.
@@ -96,7 +97,7 @@ class DenseSlam {
       PreviewType preview,
       bool enable_compositing) {
         
-      static_scene_->GetFloatImage(out_image_float_, preview, model_view);
+      static_scene_->GetFloatImage(out_image_float_, preview, model_view, currentLocalMap);
       return out_image_float_->GetData(MEMORYDEVICE_CPU);
   }
 
@@ -107,7 +108,7 @@ class DenseSlam {
       PreviewType preview,
       bool enable_compositing) {
        
-      static_scene_->GetImage(out_image_, preview, model_view);
+      static_scene_->GetImage(out_image_, preview, model_view, currentLocalMap);
       return out_image_->GetData(MEMORYDEVICE_CPU)->getValues();
     }
 
@@ -145,7 +146,12 @@ class DenseSlam {
   /// For the KITTI dataset (and the KITTI-odometry one) this represents the center of the left camera.
   Eigen::Matrix4f GetPose() const {
     /// XXX: inconsistency between the reference frames of this and the pose history?
-    return static_scene_->GetPose();
+    if(currentLocalMap != NULL){
+       return static_scene_->GetLocalMapPose(currentLocalMap);
+    }
+    else{
+       return Eigen::Matrix4f::Identity(4,4);
+    }
   }
 
   //const std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f>>&
@@ -222,12 +228,22 @@ class DenseSlam {
   }
   
   int GetNumActiveLocalMap() const {
+    runtime_error("connot use activeLocalMap temperal !");
     return static_scene_->GetLocalActiveMapNumber();
   }
   
   int GetKeyFrameNum() const {
     return orbslam_static_scene_->GetOrbSlamMapDrawer()->mpMap->GetAllKeyFrames().size();
   }
+  
+  std::vector<TodoListEntry> GettodoList () const{
+    return todoList;
+  }
+  
+  bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
+  
+  void createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose, int KeyFrameTimeStamp);
+  
   SUPPORT_EIGEN_FIELDS;
 
 private:
@@ -253,8 +269,12 @@ private:
   int orbSLAMTrackingState = 0;
   double lastKeyFrameTimeStamp = 0;
   
+  /// NOTE 判断是否开启新地图的阈值
+  const int N_originalblocks = 1000;
+  const float F_originalBlocksThreshold = 0.2f; //0.4f
+  
   ITMLib::Engine::ITMLocalMap* currentLocalMap = NULL;
-
+  
   /// \brief Enables object-awareness, object reconstruction, etc. Without this, the system is
   ///        basically just outdoor InfiniTAM.
   /// \brief 重要的参数，启动物体检测、物体重建等功能，如果没有该功能，那么就只是基于InfiniTAM了

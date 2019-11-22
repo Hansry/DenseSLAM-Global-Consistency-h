@@ -45,22 +45,21 @@ void DenseSlam::ProcessFrame(Input *input) {
 				 (double)current_frame_no_);
   });  
   
-  int primaryDataIdx = static_scene_->GetActivateDataManger()->findPrimaryDataIdx();
-  if(primaryDataIdx >= 0){
-    todoList.push_back(TodoListEntry(primaryDataIdx, true, true, true));
+  orbslamVO.get();
+  lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
+  if(first_frame){
+    int currentLocalMapIdx = static_scene_->GetMapManager()->createNewLocalMap();
+    todoList.push_back(TodoListEntry(currentLocalMapIdx,
+				     lastKeyFrameTimeStamp,
+				     lastKeyFrameTimeStamp));
   }
-  
-  int currentLocalMapIdx = static_scene_->GetActivateDataManger()->getLocalMapIndex(
-                                                        todoList[todoList.size()-1].dataId);
-  
-  currentLocalMap = static_scene_->GetMapManager()->getLocalMap(currentLocalMapIdx);
+  currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
+  todoList.back().endKeyframeTimeStamp = lastKeyFrameTimeStamp;
   
   /// @brief 利用左右图像计算稀疏场景光流
   if(FLAGS_external_odo){
     /// 使用ORBSLAM的里程计
     if(FLAGS_useOrbSLAMVO){
-      orbslamVO.get();
-      lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
       if((int)lastKeyFrameTimeStamp != current_frame_no_){
         current_frame_no_++;
         return;
@@ -168,6 +167,24 @@ void DenseSlam::ProcessFrame(Input *input) {
    }
    
   current_frame_no_++;
+}
+
+bool DenseSlam::shouldStartNewLocalMap(int CurrentLocalMapIdx) const {
+    int allocated =  static_scene_->GetMapManager()->getLocalMapSize(CurrentLocalMapIdx);
+    int counted = static_scene_->GetMapManager()->countVisibleBlocks(CurrentLocalMapIdx, 0, N_originalblocks, true);
+    int tmp = N_originalblocks;
+    if(allocated < tmp) {
+      tmp = allocated;
+    }
+    return ((float)counted/(float)tmp) < F_originalBlocksThreshold;
+}
+
+void DenseSlam::createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose, int KeyFrameTimeStamp){
+    int newIdx = static_scene_->GetMapManager()->createNewLocalMap();
+    static_scene_->GetMapManager()->setEstimatedGlobalPose(newIdx, GlobalPose);
+    todoList.push_back(TodoListEntry(newIdx, 
+				     KeyFrameTimeStamp, 
+				     KeyFrameTimeStamp));
 }
 
 void DenseSlam::SaveStaticMap(const std::string &dataset_name, const std::string &depth_name) const {

@@ -115,7 +115,6 @@ void CvToItm(const cv::Mat1s &mat, ITMShortImage *out_itm) {
 
 //将InfiniTAM rgb(a)图像转换成OpenCV Mat格式，丢弃alpha通道的信息
 void ItmToCv(const ITMUChar4Image &itm, cv::Mat3b *out_mat) {
-  // TODO(andrei): Suport resizing the matrix, if necessary.
   const Vector4u *itm_data = itm.GetData(MemoryDeviceType::MEMORYDEVICE_CPU);
   for (int i = 0; i < itm.noDims[1]; ++i) {
     for (int j = 0; j < itm.noDims[0]; ++j) {
@@ -130,7 +129,6 @@ void ItmToCv(const ITMUChar4Image &itm, cv::Mat3b *out_mat) {
 
 /// @brief 将InfiniTAM 深度图转换成OpenCV Mat格式
 void ItmToCv(const ITMShortImage &itm, cv::Mat1s *out_mat) {
-  // TODO(andrei): Suport resizing the matrix, if necessary.
   const int16_t *itm_data = itm.GetData(MemoryDeviceType::MEMORYDEVICE_CPU);
   memcpy(out_mat->data, itm_data, itm.noDims[0] * itm.noDims[1] * sizeof(int16_t));
 }
@@ -180,7 +178,8 @@ Matrix4f EigenToItm(const Eigen::Matrix4f &eigen_matrix) {
 /// @brief 得到InfiniTAM地图中在model_view视角下的图片,float类型
 void InfiniTamDriver::GetImage(ITMUChar4Image *out,
                                SparsetoDense::PreviewType get_image_type,
-                               const pangolin::OpenGlMatrix &model_view){
+                               const pangolin::OpenGlMatrix &model_view,
+			       const ITMLocalMap *currentLocalMap){
   if (nullptr != this->view) {
     ITMLib::Objects::ITMPose itm_freeview_pose = PoseFromPangolin(model_view);
 
@@ -195,7 +194,8 @@ void InfiniTamDriver::GetImage(ITMUChar4Image *out,
 	nullptr,
         GetItmVisualization(get_image_type),
         &itm_freeview_pose,
-        &intrinsics);
+        &intrinsics,
+	currentLocalMap);
   }
   // Otherwise: We're before the very first frame, so no raycast is available yet.
 }
@@ -204,7 +204,8 @@ void InfiniTamDriver::GetImage(ITMUChar4Image *out,
 void InfiniTamDriver::GetFloatImage(
     ITMFloatImage *out,
     SparsetoDense::PreviewType get_image_type,
-    const pangolin::OpenGlMatrix &model_view
+    const pangolin::OpenGlMatrix &model_view,
+    const ITMLocalMap *currentLocalMap
 ) {
   if (nullptr != this->view) {
     ITMLib::Objects::ITMPose itm_freeview_pose = PoseFromPangolin(model_view);
@@ -220,7 +221,8 @@ void InfiniTamDriver::GetFloatImage(
         out,
         GetItmVisualization(get_image_type),
         &itm_freeview_pose,
-        &intrinsics);
+        &intrinsics,
+	currentLocalMap);
   }
 }
 
@@ -229,14 +231,6 @@ void InfiniTamDriver::UpdateView(const cv::Mat3b &rgb_image,
                                  const cv::Mat1s &raw_depth_image) {
   CvToItm(rgb_image, rgb_itm_);
   CvToItm(raw_depth_image, raw_depth_itm_);
-  
-//   for(int i=0; i<raw_depth_image.rows; i++){
-//     for(int j=0; j<raw_depth_image.cols; j++){
-//       if(raw_depth_image.at<short>(i,j)>0){
-//          std::cout << "++++++++++++++++++++++=:" << raw_depth_image.at<short>(i,j) << std::endl;
-//       }
-//     }
-//   }
   
   this->viewBuilder->UpdateView(&view, rgb_itm_, raw_depth_itm_, settings->useBilateralFilter);
   

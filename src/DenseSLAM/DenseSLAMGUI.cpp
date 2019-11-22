@@ -192,8 +192,12 @@ void PangolinGui::Run(){
       if(paramGUI.viewRaycastDepth){
           cv::Size2i tempRaycastDepthSize = dense_slam_input_->GetDepthSize();
           cv::Mat1s *tempRaycastShort = new cv::Mat1s(tempRaycastDepthSize.height, tempRaycastDepthSize.width);
-          Eigen::Matrix4f cam_raycast = dense_slam_->GetPose().inverse();
-          pangolin::OpenGlMatrix pm_raycast(cam_raycast);
+          
+	  
+	  Eigen::Matrix4f cam_raycast = dense_slam_->GetPose().inverse();
+          
+	  
+	  pangolin::OpenGlMatrix pm_raycast(cam_raycast);
           /// NOTE 光线投影回来的深度图
           const float* tempRaycastDepth = dense_slam_ -> GetRaycastDepthPreview(pm_raycast, static_cast<PreviewType>(current_preview_depth_type), enable_compositing_dense);
           if(tempRaycastDepth != nullptr ){
@@ -226,7 +230,10 @@ void PangolinGui::Run(){
         
 	const unsigned char *preview_dense = nullptr;
         dense_map_fpv_view_->Activate(*dense_map_pane_cam_);
+	
 	Eigen::Matrix4f cam_mv = dense_slam_->GetPose().inverse();
+	
+	
         pangolin::OpenGlMatrix pm(cam_mv);
         dense_map_pane_cam_->SetModelViewMatrix(pm);
 	glColor3f(1.0,1.0,1.0);
@@ -239,9 +246,12 @@ void PangolinGui::Run(){
       
       *(NumFrame) = Format("%d", dense_slam_->GetCurrentFrameNo());
       *(NumKeyFrame) = Format("%d", dense_slam_->GetKeyFrameNum());
-      *(NumActiveLocalMap) = Format("%d", dense_slam_->GetNumActiveLocalMap());
+//       *(NumActiveLocalMap) = Format("%d", dense_slam_->GetNumActiveLocalMap());
       *(NumLocalMap) = Format("%d", dense_slam_->GetNumLocalMap());
-      
+      if(dense_slam_->GettodoList().size()>0){
+         *(CurrentLocalMapStartKeyframeNo) = Format("%d", dense_slam_->GettodoList().back().startKeyframeTimeStamp);
+	 *(CurrentLocalMapEndKeyframeNo) = Format("%d", dense_slam_->GettodoList().back().endKeyframeTimeStamp);
+      }
       // Swap frames and Process Events
       pangolin::FinishFrame();
 
@@ -427,18 +437,11 @@ void PangolinGui::CreatePangolinDisplays(){
     pangolin::Var<function<void(void)>> save_map_button("ui.[S]ave Dense and Sparse Map ", save_map);
     pangolin::RegisterKeyPressCallback('s', save_map);
     
-    
     auto ORB_SLAM2 = [this](){
       cout<< "the ORBSLAM has no integrate to this system yet"<< endl;
     };
     pangolin::Var<function<void(void)>> orb_slam2_button("ui.or[B] slam", ORB_SLAM2);
     pangolin::RegisterKeyPressCallback('b', ORB_SLAM2);
-    
-    NumLocalMap = new pangolin::Var<string>("ui.Number of Submaps: ", "");
-    NumActiveLocalMap = new pangolin::Var<string>("ui.Number of Active Submaps: ", "");
-    
-    NumFrame = new pangolin::Var<string>("ui.Number of Frames: ", "");
-    NumKeyFrame = new pangolin::Var<string>("ui.Number of KeyFrames: ", "");
 
     auto quit = [this]() {
 //       dense_slam_->WaitForJobs();
@@ -472,6 +475,15 @@ void PangolinGui::CreatePangolinDisplays(){
         current_lidar_vis_ = (VisualizeError::kEnd - 1);
       }
     });
+    
+    NumLocalMap = new pangolin::Var<string>("ui.Number of Submaps: ", "");
+//  NumActiveLocalMap = new pangolin::Var<string>("ui.Number of Active Submaps: ", "");
+    
+    NumFrame = new pangolin::Var<string>("ui.Number of Frames: ", "");
+    NumKeyFrame = new pangolin::Var<string>("ui.Number of KeyFrames: ", "");
+    
+    CurrentLocalMapStartKeyframeNo = new pangolin::Var<string> ("ui.Curr LocalMap Start Keyframe No.", "");
+    CurrentLocalMapEndKeyframeNo = new pangolin::Var<string> ("ui.Curr LocalMap End Keyframe No.", "");
 
     /***************************************************************************
      * GUI Checkboxes
