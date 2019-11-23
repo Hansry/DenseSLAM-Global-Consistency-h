@@ -43,18 +43,22 @@ void DenseSlam::ProcessFrame(Input *input) {
   orbslam_static_scene_trackRGBD(*input_rgb_image_, 
 				 orbSLAMInputDepth, 
 				 (double)current_frame_no_);
-  
   });  
   
+  /// NOTE 如果当前帧不是关键帧，那么则不进行融合或者更新，直接就return
   orbslamVO.get();
   lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
   if((int)lastKeyFrameTimeStamp != current_frame_no_){
         current_frame_no_++;
         return;
   }
+  
+  /// NOTE 若当前帧为关键帧，则得到当前帧在世界坐标系下的位姿以及跟踪状态
   orbSLAM2_Pose = orbslam_static_scene_->GetPose();
   orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
-  if(first_frame){
+  
+  /// NOTE 如果是第一帧，则创建子地图，设置创建的子地图基于世界坐标系的位姿
+  if(first_frame || shouldCreateNewLocalMap){
     int currentLocalMapIdx = static_scene_->GetMapManager()->createNewLocalMap();
     ITMLib::Objects::ITMPose tempPose;
     tempPose.SetInvM(drivers::EigenToItm(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)));
@@ -62,19 +66,23 @@ void DenseSlam::ProcessFrame(Input *input) {
     todoList.push_back(TodoListEntry(currentLocalMapIdx,
 				     lastKeyFrameTimeStamp,
 				     lastKeyFrameTimeStamp));
+    shouldCreateNewLocalMap = false;
   }
-    
+  
   currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
   todoList.back().endKeyframeTimeStamp = lastKeyFrameTimeStamp;
       
+  std::cout << "drivers::EigenToItm(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose): \n"
+            << drivers::EigenToItm(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)) << std::endl;
+  
   /// @brief 利用左右图像计算稀疏场景光流
   if(FLAGS_external_odo){
     /// 使用ORBSLAM的里程计
     if(FLAGS_useOrbSLAMVO){
       /// NOTE "2"意味着 OrbSLAM 跟踪成功
       if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
-	    static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
-	    pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
+	    static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
+	    pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
 	 }
       }
     else{
@@ -87,7 +95,7 @@ void DenseSlam::ProcessFrame(Input *input) {
       // to the visual odometry instead.
       bool original_gray = false;
 
-      cv::Mat1b *left_gray = new cv::Mat1b;
+      cv::Mat1b *left_gray;
       cv::Mat1b *right_gray;
       // 如果是灰度图直接计算光流
       if (original_gray) {
@@ -171,13 +179,8 @@ void DenseSlam::ProcessFrame(Input *input) {
       }
    }
    
-   if(shouldStartNewLocalMap(todoList.back().dataId) && !first_frame){
-     ITMLib::Objects::ITMPose tempPose;
-     tempPose.SetInvM(drivers::EigenToItm(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)));
-     int newIdx = createNewLocalMap(tempPose);
-     todoList.push_back(TodoListEntry(newIdx, 
-				     lastKeyFrameTimeStamp, 
-				     lastKeyFrameTimeStamp));
+   if(shouldStartNewLocalMap(todoList.back().dataId) && !first_frame ){
+       shouldCreateNewLocalMap = true;
   }
    current_frame_no_++;
 }
@@ -186,7 +189,6 @@ bool DenseSlam::shouldStartNewLocalMap(int CurrentLocalMapIdx) const {
     int allocated =  static_scene_->GetMapManager()->getLocalMapSize(CurrentLocalMapIdx);
     int counted = static_scene_->GetMapManager()->countVisibleBlocks(CurrentLocalMapIdx, 0, N_originalblocks, true);
     int tmp = N_originalblocks;
-    std::cout << "counted: " << counted << std::endl;
     if(allocated < tmp) {
       tmp = allocated;
     }

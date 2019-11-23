@@ -223,6 +223,10 @@ class DenseSlam {
      return orbslam_static_scene_->GetTracker();
   }
   
+  ITMLib::Engine::ITMLocalMap* GetCurrentLocalMap() const {
+    return currentLocalMap;
+  }
+  
   int GetNumLocalMap() const {
     return static_scene_->GetMapNumber();
   }
@@ -272,6 +276,7 @@ private:
   /// NOTE 判断是否开启新地图的阈值
   const int N_originalblocks = 1000;
   const float F_originalBlocksThreshold = 0.1f; //0.4f
+  bool shouldCreateNewLocalMap = false;
   
   ITMLib::Engine::ITMLocalMap* currentLocalMap = NULL;
   
