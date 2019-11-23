@@ -1,6 +1,6 @@
 # DenseSLAM: Simultaneous Localization and Mapping for sparse and dense maps generation.
 
-This is a dense SLAM system written in C++. It builds on [InfiniTAM](https://github.com/victorprad/InfiniTAM). Using the odometry for ORBSLAM2, this system generates the dense map form InfiniTAM. 
+This is a dense SLAM system written in C++. It builds on [InfiniTAM](https://github.com/victorprad/InfiniTAM). Using the odometry from ORBSLAM2, this system generates the dense map form InfiniTAM. 
 
 The source code is [hosted on GitHub](https://github.com/Hansry/DenseSLAM-Global-Consistency-h).
 

@@ -242,7 +242,7 @@ class DenseSlam {
   
   bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
   
-  void createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose, int KeyFrameTimeStamp);
+  int createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose);
   
   SUPPORT_EIGEN_FIELDS;
 
@@ -271,7 +271,7 @@ private:
   
   /// NOTE 判断是否开启新地图的阈值
   const int N_originalblocks = 1000;
-  const float F_originalBlocksThreshold = 0.2f; //0.4f
+  const float F_originalBlocksThreshold = 0.1f; //0.4f
   
   ITMLib::Engine::ITMLocalMap* currentLocalMap = NULL;
   
