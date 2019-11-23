@@ -82,7 +82,12 @@ void DenseSlam::ProcessFrame(Input *input) {
       /// NOTE "2"意味着 OrbSLAM 跟踪成功
       if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
 	    static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
-	    pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
+	    Eigen::Matrix4f currLocalMapPose = drivers::ItmToEigen(currentLocalMap->estimatedGlobalPose.GetM());
+	    if(shouldClearPoseHistory){
+	      pose_history_.clear();
+	    }
+	    pose_history_.push_back((currLocalMapPose*ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)).inverse());
+	    shouldClearPoseHistory = false;
 	 }
       }
     else{
@@ -181,6 +186,7 @@ void DenseSlam::ProcessFrame(Input *input) {
    
    if(shouldStartNewLocalMap(todoList.back().dataId) && !first_frame ){
        shouldCreateNewLocalMap = true;
+       shouldClearPoseHistory = true;
   }
    current_frame_no_++;
 }

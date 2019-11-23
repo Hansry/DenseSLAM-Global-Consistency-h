@@ -277,6 +277,7 @@ private:
   const int N_originalblocks = 1000;
   const float F_originalBlocksThreshold = 0.1f; //0.4f
   bool shouldCreateNewLocalMap = false;
+  bool shouldClearPoseHistory = false;
   
   ITMLib::Engine::ITMLocalMap* currentLocalMap = NULL;
   
