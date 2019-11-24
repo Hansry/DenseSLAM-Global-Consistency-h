@@ -66,14 +66,16 @@ void DenseSlam::ProcessFrame(Input *input) {
     todoList.push_back(TodoListEntry(currentLocalMapIdx,
 				     lastKeyFrameTimeStamp,
 				     lastKeyFrameTimeStamp));
+    
+    /// NOTE 这里由于显卡内存不足，只能在创建新子地图的时候将前一个子地图给remove掉
+    if(todoList.size()>1){
+      static_scene_->GetMapManager()->removeLocalMap(todoList.front().dataId);
+    }
     shouldCreateNewLocalMap = false;
   }
   
   currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
   todoList.back().endKeyframeTimeStamp = lastKeyFrameTimeStamp;
-      
-  std::cout << "drivers::EigenToItm(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose): \n"
-            << drivers::EigenToItm(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)) << std::endl;
   
   /// @brief 利用左右图像计算稀疏场景光流
   if(FLAGS_external_odo){
@@ -198,6 +200,9 @@ bool DenseSlam::shouldStartNewLocalMap(int CurrentLocalMapIdx) const {
     if(allocated < tmp) {
       tmp = allocated;
     }
+    std::cout << "counted: " << (float)counted << std::endl;
+    std::cout << "tmp: " << (float)tmp << std::endl;
+
     std::cout << "((float)counted/(float)tmp): " << ((float)counted/(float)tmp) << std::endl;
     return ((float)counted/(float)tmp) < F_originalBlocksThreshold;
 }

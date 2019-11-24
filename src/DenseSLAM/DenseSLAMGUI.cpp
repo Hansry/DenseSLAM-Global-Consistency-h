@@ -192,11 +192,7 @@ void PangolinGui::Run(){
       if(paramGUI.viewRaycastDepth){
           cv::Size2i tempRaycastDepthSize = dense_slam_input_->GetDepthSize();
           cv::Mat1s *tempRaycastShort = new cv::Mat1s(tempRaycastDepthSize.height, tempRaycastDepthSize.width);
-          
-	  
 	  Eigen::Matrix4f cam_raycast = dense_slam_->GetPose().inverse();
-          
-	  
 	  pangolin::OpenGlMatrix pm_raycast(cam_raycast);
           /// NOTE 光线投影回来的深度图
           const float* tempRaycastDepth = dense_slam_ -> GetRaycastDepthPreview(pm_raycast, static_cast<PreviewType>(current_preview_depth_type), enable_compositing_dense);
@@ -565,15 +561,6 @@ void PangolinGui::CreatePangolinDisplays(){
     float camera_translation_scale = 1.0f;
     float camera_zoom_scale = 1.0f;
     
-    if(dense_slam_->IsDynamicMode()){
-       object_reconstruction_view_ = pangolin::Display("object_3d").SetAspect(aspect_ratio)
-        .SetHandler(new DSHandler3D(
-            instance_cam_,
-            pangolin::AxisY,
-            camera_translation_scale,
-            camera_zoom_scale
-        ));
-    }
     // These objects remain under Pangolin's management, so they don't need to be deleted by the current class.
     // 构建的地图主要显示
     main_view_ = &(pangolin::Display("main").SetAspect(aspect_ratio));

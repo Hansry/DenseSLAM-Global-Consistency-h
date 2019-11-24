@@ -142,8 +142,7 @@ class DenseSlam {
     return static_scene_->GetLastEgomotion();
   }
 
-  /// \brief Returns the current pose of the camera in the coordinate frame used by the tracker.
-  /// For the KITTI dataset (and the KITTI-odometry one) this represents the center of the left camera.
+  /// @brief 注意这里的GetPose()返回的是当前子地图到当前帧的相对变换
   Eigen::Matrix4f GetPose() const {
     /// XXX: inconsistency between the reference frames of this and the pose history?
     if(currentLocalMap != NULL){
@@ -275,7 +274,7 @@ private:
   
   /// NOTE 判断是否开启新地图的阈值
   const int N_originalblocks = 1000;
-  const float F_originalBlocksThreshold = 0.1f; //0.4f
+  const float F_originalBlocksThreshold = 0.2f; //0.4f
   bool shouldCreateNewLocalMap = false;
   bool shouldClearPoseHistory = false;
   
