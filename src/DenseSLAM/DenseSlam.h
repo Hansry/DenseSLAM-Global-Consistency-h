@@ -176,6 +176,11 @@ class DenseSlam {
 //     static_scene_->WaitForMeshDump();
 //   }
 
+  void saveLocalMapToHostMemory(int LocalMapId){
+    ITMLib::Engine::ITMLocalMap *LocalMapswapOut= static_scene_->GetMapManager()->getLocalMap(LocalMapId);
+    static_scene_->GetSwappingEngine()->SaveToGlobalMemory(LocalMapswapOut->scene);
+  }
+
   const Eigen::Matrix34f GetLeftRgbProjectionMatrix() const {
     return projection_left_rgb_;
   };
@@ -274,7 +279,7 @@ private:
   
   /// NOTE 判断是否开启新地图的阈值
   const int N_originalblocks = 1000;
-  const float F_originalBlocksThreshold = 0.2f; //0.4f
+  const float F_originalBlocksThreshold = 0.15f; //0.4f
   bool shouldCreateNewLocalMap = false;
   bool shouldClearPoseHistory = false;
   

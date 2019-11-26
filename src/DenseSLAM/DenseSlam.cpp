@@ -69,7 +69,11 @@ void DenseSlam::ProcessFrame(Input *input) {
     
     /// NOTE 这里由于显卡内存不足，只能在创建新子地图的时候将前一个子地图给remove掉
     if(todoList.size()>1){
-      static_scene_->GetMapManager()->removeLocalMap(todoList.front().dataId);
+//       static_scene_->GetMapManager()->removeLocalMap(todoList.front().dataId);
+//       int swapOutLocalMapID = todoList[todoList.size()-2].dataId;
+//       future<void> swap_out = async(launch::async, [this, &swapOutLocalMapID]{
+// 	   saveLocalMapToHostMemory(swapOutLocalMapID);
+//       });
     }
     shouldCreateNewLocalMap = false;
   }

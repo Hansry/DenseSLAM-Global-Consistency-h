@@ -220,6 +220,10 @@ public:
       const ITMLocalMap *currentLocalMap = nullptr
   );
   
+  ITMLib::Engine::ITMSwappingEngine<ITMVoxel, ITMVoxelIndex>* GetSwappingEngine(){
+    return this->denseMapper->GetSwappingEngine();
+  }
+  
   /// @brief 返回世界坐标系到当前帧的变换，Tw->c,the transform from world to current
   Eigen::Matrix4f GetPose() const{
       /// 得到主子地图到
