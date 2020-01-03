@@ -17,7 +17,7 @@ void PrecomputedDepthProvider::DisparityMapFromStereo(const cv::Mat&,
                                                       const cv::Mat&,
                                                       cv::Mat &out_disparity
 ) {
-  ReadPrecomputed(this->input_->GetCurrentFrame(), out_disparity);
+     ReadPrecomputed(this->input_->GetCurrentFrame(), out_disparity);
 }
 
 void PrecomputedDepthProvider::ReadPrecomputed(int frame_idx, cv::Mat &out) const {
@@ -25,11 +25,13 @@ void PrecomputedDepthProvider::ReadPrecomputed(int frame_idx, cv::Mat &out) cons
   // For testing, in the beginning we directly read depth (not disparity) maps from the disk.
   string depth_fpath = this->folder_ + "/" + utils::Format(this->fname_format_, frame_idx);
 
+  // 读取由dispnet计算而来的depth
   if (utils::EndsWith(depth_fpath, ".pfm")) {
     // DispNet outputs depth maps as 32-bit float single-channel HDR images. Not a lot of programs
     // can load them natively for manual inspection. Photoshop can, but cannot natively display the
     // 32-bit image unless it is first converted to 16-bit.
     ReadFilePFM(out, depth_fpath);
+  //读取OpenCV的XML
   } else {
     // Otherwise load an OpenCV XML dump (since we need 16-bit signed depth maps, which OpenCV
     // cannot save as regular images, even though the PNG spec has nothing against them).
@@ -51,13 +53,12 @@ void PrecomputedDepthProvider::ReadPrecomputed(int frame_idx, cv::Mat &out) cons
   }
 
   if (this->input_is_depth_) {
-    // We're reading depth directly, so we need to ensure the max depth here.
+    // 由于直接读取深度，因此需要保证深度的最大值，保证是以mm为单位的
     float max_depth_mm_f = GetMaxDepthMeters() * kMetersToMillimeters;
     int16_t max_depth_mm_s = static_cast<int16_t>(round(max_depth_mm_f));
 
     for(int i = 0; i < out.rows; ++i) {
       for(int j = 0; j < out.cols; ++j) {
-        // TODO-LOW(andrei): Do this in a nicer way...
         if(out.type() == CV_32FC1) {
           float depth = out.at<float>(i, j);
           if (depth > max_depth_mm_f) {

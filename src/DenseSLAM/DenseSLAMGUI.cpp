@@ -122,9 +122,7 @@ void PangolinGui::Run(){
             else {
               message = "Free cam preview";
             }
-            preview = dense_slam_->GetMapRaycastPreview(pane_cam_->GetModelViewMatrix(),
-                  static_cast<PreviewType>(current_preview_type_),
-		  enable_compositing);
+            preview = dense_slam_->GetMapRaycastPreview(pane_cam_->GetModelViewMatrix(), static_cast<PreviewType>(current_preview_type_), enable_compositing);
 	    pane_texture_->Upload(preview, GL_RGBA, GL_UNSIGNED_BYTE);
             pane_texture_->RenderToViewport(true);
             DrawPose(time_ms);
@@ -163,18 +161,7 @@ void PangolinGui::Run(){
       glColor3f(1.0f, 1.0f, 1.0f);
       /// NOTE  当前帧大于1，对RGB图片进行预览。 
       /// 若启动动态模式，则显示的检测动态物体的RGB图像，不启动动态检测的时候， 则显示的是ORB特征点的RGB图片
-      if(dense_slam_->GetCurrentFrameNo() >= 1 && dense_slam_->IsDynamicMode()) {
-	//是否显示原来的图片预览
-        if (display_raw_previews_->Get()) {
-          UploadCvTexture(*(dense_slam_->GetRgbPreview()), *pane_texture_, true, GL_UNSIGNED_BYTE);
-        } 
-//         else {
-// 	  //得到静态RGB图片的预览
-//           UploadCvTexture(*(dense_slam_->GetStaticRgbPreview()), *pane_texture_, true, GL_UNSIGNED_BYTE); 
-//         }
-        pane_texture_->RenderToViewport(true);
-      }
-      else if(dense_slam_->GetCurrentFrameNo() >= 1 && !dense_slam_->IsDynamicMode()){
+      if(dense_slam_->GetCurrentFrameNo() >= 1){
       cv::Mat im = dense_slam_->GetOrbSlamFrameDrawerGlobal()->DrawFrame();
 	UploadCvTexture(im, *pane_texture_, true, GL_UNSIGNED_BYTE);
 	pane_texture_->RenderToViewport(true);
@@ -212,7 +199,7 @@ void PangolinGui::Run(){
       pane_texture_->RenderToViewport(true);
             
       /// NOTE 以第一视角观察orbslam以及稠密地图的第一视角
-      if(dense_slam_->GetCurrentFrameNo()>=1 && !dense_slam_->IsDynamicMode()){
+      if(dense_slam_->GetCurrentFrameNo()>=1){
 	  orb_trajectory_view_->Activate(*orb_Trajectory_pane_cam_);
 	  glColor3f(1.0,1.0,1.0);
 	  // OrbSlamMapDrawer_->DrawTracjectory();
@@ -228,7 +215,6 @@ void PangolinGui::Run(){
         dense_map_fpv_view_->Activate(*dense_map_pane_cam_);
 	
 	Eigen::Matrix4f cam_mv = dense_slam_->GetPose().inverse();
-	
 	
         pangolin::OpenGlMatrix pm(cam_mv);
         dense_map_pane_cam_->SetModelViewMatrix(pm);
@@ -416,7 +402,7 @@ void PangolinGui::CreatePangolinDisplays(){
     pangolin::Var<function<void(void)>> next_frame_button("ui.[N]ext Frame", next_frame);
     pangolin::RegisterKeyPressCallback('n', next_frame);
 
-    //保存静态地图，即没有运动中的物体
+    //保存地图
     auto save_map = [this]() {
       Tic("Dense map mesh generation");
       if (dense_slam_->GetCurrentFrameNo() < 2) {
@@ -554,10 +540,6 @@ void PangolinGui::CreatePangolinDisplays(){
     float aspect_ratio = static_cast<float>(width_) / height_;//宽高比
     rgb_view_ = pangolin::Display("rgb").SetAspect(aspect_ratio);
     depth_view_ = pangolin::Display("depth").SetAspect(aspect_ratio);
-    if(dense_slam_->IsDynamicMode()){
-        segment_view_ = pangolin::Display("segment").SetAspect(aspect_ratio);
-        object_view_ = pangolin::Display("object").SetAspect(aspect_ratio);
-    }
     float camera_translation_scale = 1.0f;
     float camera_zoom_scale = 1.0f;
     
@@ -584,7 +566,7 @@ void PangolinGui::CreatePangolinDisplays(){
                     camera_zoom_scale));
     
     //用于显示OrbSLAM的位姿
-    if(!dense_slam_->IsDynamicMode()){
+
     orb_trajectory_view_ = &(pangolin::Display("orbslam_trajectory"));
     orb_trajectory_view_->SetHandler(
       new DSHandler3D(orb_Trajectory_pane_cam_,
@@ -597,13 +579,12 @@ void PangolinGui::CreatePangolinDisplays(){
 	   pangolin::AxisY,
            camera_translation_scale,
            camera_zoom_scale));
-    }
     //主要的一些细节部分
     detail_views_ = &(pangolin::Display("detail"));
     detail_views_raycast = &(pangolin::Display("detail_raycast"));
 
     // Add labels to our data logs (and automatically to our plots).
-    if(dense_slam_->IsDynamicMode()){
+    /*
        data_log_.SetLabels({"Active tracks",
                          "Free GPU Memory (100s of MiB)",
                          "Static map memory usage (100s of MiB)",
@@ -615,35 +596,23 @@ void PangolinGui::CreatePangolinDisplays(){
        float tick_y = 1.0f;
        plotter_ = new pangolin::Plotter(&data_log_, 0.0f, 200.0f, -0.1f, 25.0f, tick_x, tick_y);
        plotter_->Track("$i");  // This enables automatic scrolling for the live plots.
-    }
+    */
 
     //main_views:指的是融合后的地图
     //detail_views:指的是static_rgb、 static_depth、 segment_view_、object_view
     //SetBounds(bottom, top, left, right)
     main_view_->SetBounds(pangolin::Attach::Pix(height_ *2.0), pangolin::Attach::Pix(height_ * 3.0), pangolin::Attach::Pix(kUiWidth*1.2), pangolin::Attach::Pix(kUiWidth*1.2+width_));
     orbslam_view_->SetBounds(pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(height_ * 2.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
-    if(dense_slam_->IsDynamicMode()){
-    detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
+    detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_*(1.0/3.0)));
     detail_views_->SetLayout(pangolin::LayoutEqual)
       .AddDisplay(rgb_view_)
-      .AddDisplay(depth_view_)
-      .AddDisplay(segment_view_)
-      .AddDisplay(object_view_)
-      .AddDisplay(*plotter_)
-      .AddDisplay(object_reconstruction_view_);
-    }
-    else{
-      detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_*(1.0/3.0)));
-      detail_views_->SetLayout(pangolin::LayoutEqual)
-      .AddDisplay(rgb_view_)
       .AddDisplay(depth_view_);
-      orb_trajectory_view_->SetBounds(pangolin::Attach::Pix(height_*0.32), pangolin::Attach::Pix(height_*1.0), 
+    orb_trajectory_view_->SetBounds(pangolin::Attach::Pix(height_*0.32), pangolin::Attach::Pix(height_*1.0), 
 				      pangolin::Attach::Pix(kUiWidth+width_*(1.0/3.0)),
 				      pangolin::Attach::Pix(kUiWidth+width_*(2.0/3.0)));
-      dense_map_fpv_view_->SetBounds(pangolin::Attach::Pix(height_*0.32), pangolin::Attach::Pix(height_*1.0), 
+    dense_map_fpv_view_->SetBounds(pangolin::Attach::Pix(height_*0.32), pangolin::Attach::Pix(height_*1.0), 
 				      pangolin::Attach::Pix(kUiWidth+width_*(2.0/3.0)),
 				      pangolin::Attach::Pix(kUiWidth+width_));
-    }
     // Internally, InfiniTAM stores these as RGBA, but we discard the alpha when we upload the
     // textures for visualization (hence the 'GL_RGB' specification).
     this->pane_texture_ = new pangolin::GlTexture(width_, height_, GL_RGB, false, 0, GL_RGB,GL_UNSIGNED_BYTE);

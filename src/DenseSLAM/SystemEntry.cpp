@@ -6,36 +6,21 @@ const std::string kKittiTracking = "kitti-tracking";
 const std::string kKitti         = "kitti";
 const std::string ORBVocPath = "../src/ORB-SLAM2-API-M/Vocabulary/ORBvoc.txt";
 const std::string SettingFile = "../data/mini-seq-06/kitti_09_26.yaml";
+
 //将需要的命令行参数使用gflags的宏:DEFINE_xxxx(变量名，默认值，help-string)定义在文件当中，全局变量，存储在区全局区中
-DEFINE_string(dataset_type, kKittiOdometry,
-              "The type of the input dataset at which 'dataset_root' is pointing. Supported are "
-              "'kitti-odometry' and 'kitti-tracking'.");
 DEFINE_string(dataset_root, "", "The root folder of the dataset or dataset sequence to use.");
-DEFINE_bool(dynamic_mode, false, "Whether DynSLAM should be aware of dynamic objects and attempt to "
-                                "reconstruct them. Disabling this makes the system behave like a "
-                                "vanilla outdoor InfiniTAM.");
 DEFINE_string(ORBvoc, ORBVocPath, "the path to load the ORBvoc.txt");
 DEFINE_string(strSettingFile, SettingFile, "the path to load the setting file for ORBSLAM");
 DEFINE_int32(frame_offset, 0, "The frame index from which to start reading the dataset sequence.");
 DEFINE_int32(frame_limit, 0, "How many frames to process in auto mode. 0 = no limit.");
-DEFINE_bool(voxel_decay, true, "Whether to enable map regularization via voxel decay (a.k.a. voxel "
-                               "garbage collection).");
-DEFINE_int32(min_decay_age, 100, "The minimum voxel *block* age for voxels within it to be eligible "
-                                "for deletion (garbage collection).");
-DEFINE_int32(max_decay_weight, 0.5, "The maximum voxel weight for decay. Voxels which have "
-                                  "accumulated more than this many measurements will not be "
-                                  "removed.");
+DEFINE_bool(voxel_decay, true, "Whether to enable map regularization via voxel decay (a.k.a. voxel garbage collection).");
+DEFINE_int32(min_decay_age, 100, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection).");
+DEFINE_int32(max_decay_weight, 0.5, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed.");
 DEFINE_int32(kitti_tracking_sequence_id, -1, "Used in conjunction with --dataset_type kitti-tracking.");
-DEFINE_bool(direct_refinement, false, "Whether to refine motion estimates for other cars computed "
-                                     "sparsely with RANSAC using a semidense direct image "
-                                     "alignment method.");
+DEFINE_bool(direct_refinement, false, "Whether to refine motion estimates for other cars computed sparsely with RANSAC using a semidense direct image alignment method.");
 // TODO-LOW(andrei): Automatically adjust the voxel GC params when depth weighting is enabled.
-DEFINE_bool(use_depth_weighting, false, "Whether to adaptively set fusion weights as a function of "
-                                        "the inverse depth (w \\propto \\frac{1}{Z}). If disabled, "
+DEFINE_bool(use_depth_weighting, false, "Whether to adaptively set fusion weights as a function of the inverse depth (w \\propto \\frac{1}{Z}). If disabled, "
                                         "all new measurements have a constant weight of 1.");
-DEFINE_bool(semantic_evaluation, true, "Whether to separately evaluate the static and dynamic "
-                                       "parts of the reconstruction, based on the semantic "
-                                       "segmentation of each frame.");
 DEFINE_double(scale, 1.0, "Whether to run in reduced-scale mode. Used for experimental purposes. "
                           "Requires the (odometry) sequence to have been preprocessed using the "
                           "'scale_sequence.py' script.");
@@ -46,8 +31,7 @@ DEFINE_int32(evaluation_delay, 0, "How many frames behind the current one should
                                   "measuring the impact of the regularization, which ``follows'' "
                                   "the camera with a delay of 'min_decay_age'. Warning: does not "
                                   "support dynamic scenes.");
-DEFINE_bool(close_on_complete, true, "Whether to shut down automatically once 'frame_limit' is "
-                                     "reached.");
+DEFINE_bool(close_on_complete, true, "Whether to shut down automatically once 'frame_limit' is reached.");
 DEFINE_bool(record, true, "Whether to record a video of the GUI and save it to disk. Using an "
                            "external program usually leads to better results, though.");
 DEFINE_bool(chase_cam, false, "Whether to preview the reconstruction in chase cam mode, following "
@@ -56,10 +40,10 @@ DEFINE_int32(fusion_every, 1, "Fuse every kth frame into the map. Used for evalu
                               "behavior under reduced temporal resolution.");
 DEFINE_bool(autoplay, false, "Whether to start with autoplay enabled. Useful for batch experiments.");
 DEFINE_bool(useOrbSLAMViewer, false, "Whether to launch the GUI of ORBSLAM2.");
-DEFINE_bool(viewRaycastDepth, true, "Whether to view the raycast depth.");
+DEFINE_bool(viewRaycastDepth, false, "Whether to view the raycast depth.");
 
 
-// Note: the [RIP] tags signal spots where I wasted more than 30 minutes debugging a small, silly
+// Note: the [RIP] tags signal spots where I wasted more than 30 minutes debugging a small, sillyzhe
 // issue, which could easily be avoided in the future.
 
 // Handle SIGSEGV and its friends by printing sensible stack traces with code snippets.
@@ -168,40 +152,12 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
   }
   float downscale_factor_f = static_cast<float>(downscale_factor);//强制转换为float类型
 
-  //Odometry or tracking, 判断是否使用Dispnet以及设置保存深度图文件夹的名称
-  if (FLAGS_dataset_type == kKittiOdometry) {
-    if (downscale_factor != 1.0) {
-      if (FLAGS_use_dispnet) {   //FLAGS_use_dispnet=true (default)
-        input_config = Input::KittiOdometryDispnetLowresConfig(downscale_factor_f);
-      }
-      else {
-        input_config = Input::KittiOdometryLowresConfig(downscale_factor_f);
-      }
-    }
-    else {
-      if (FLAGS_use_dispnet) {
-        input_config = Input::KittiOdometryDispnetConfig();
-      }
-      else {
-        input_config = Input::KittiOdometryConfig();
-      }
-    }
-  }
-  else if (FLAGS_dataset_type == kKittiTracking){
-    int t_seq_id = FLAGS_kitti_tracking_sequence_id;
-    if (t_seq_id < 0) {
-      throw runtime_error("Please specify a KITTI tracking sequence ID.");
-    }
-
-    if (FLAGS_use_dispnet) {
-      input_config = Input::KittiTrackingDispnetConfig(t_seq_id);
-    }
-    else {
-      input_config = Input::KittiTrackingConfig(t_seq_id);
-    }
+  //Odometry 判断是否使用Dispnet以及设置保存深度图文件夹的名称
+  if (FLAGS_use_dispnet) {
+     input_config = Input::KittiOdometryDispnetConfig();
   }
   else {
-    throw runtime_error(utils::Format("Unknown dataset type: [%s]", FLAGS_dataset_type.c_str()));
+     input_config = Input::KittiOdometryConfig();
   }
 
   Eigen::Matrix34d left_gray_proj;
@@ -210,9 +166,7 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
   Eigen::Matrix34d right_color_proj;
   Eigen::Matrix4d velo_to_left_gray_cam;//雷达到灰度相机0的转换关系
 
-  // Read all the calibration info we need.
-  // HERE BE DRAGONS Make sure you're using the correct matrix for the grayscale and/or color cameras!
-  // ReadKittiOdometryCalibration读取各个相机的内参以及雷达到灰度相机0的转换关系
+  // ReadKittiOdometryCalibration读取各个相机的内参以及雷达到灰度相机0的转换关系,挺重要的这里
   ReadKittiOdometryCalibration(dataset_root + "/" + input_config.calibration_fname,
                                left_gray_proj, right_gray_proj, left_color_proj, right_color_proj,
                                velo_to_left_gray_cam, downscale_factor);
@@ -235,11 +189,9 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
 
   //frame_offset=0 (default)
   int frame_offset = FLAGS_frame_offset;
-
-  // TODO-LOW(andrei): Compute the baseline from the projection matrices.
+  
+  //基线
   float baseline_m = 0.537150654273f;
-  // TODO(andrei): Be aware of which camera you're using for the depth estimation. (for pure focal
-  // length it doesn't matter, though, since it's the same)
   float focal_length_px = left_gray_proj(0, 0);
   
   //depth = baseline*fx/disparity
@@ -255,13 +207,12 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
       frame_offset,
       downscale_factor);
   
-  //通过双目预测深度
+  //通过预测深度，可以通过从disk读取，也可以实时进行计算
   DepthProvider *depth = new PrecomputedDepthProvider(
       *input_out,
       dataset_root + "/" + input_config.depth_folder,
       input_config.depth_fname_format,
       input_config.read_depth,
-      frame_offset,
       input_config.min_depth_m,
       input_config.max_depth_m
   );
@@ -277,7 +228,7 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
 //   }
 
   //与InfiniTAM的接口
-  drivers::InfiniTamDriver *driver = new InfiniTamDriver(
+  drivers::InfiniTamDriver *itmDriver = new InfiniTamDriver(
       driver_settings,
       SparsetoDense::drivers::CreateItmCalib(left_color_proj, frame_size),
       SparsetoDense::drivers::ToItmVec((*input_out)->GetRgbSize()),
@@ -317,14 +268,12 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
 
   //进行光流估计，以检测动态物体
   auto sparse_sf_provider = new instreclib::VisoSparseSFProvider(sf_params);
-
-  assert((FLAGS_dynamic_mode || !FLAGS_direct_refinement) && "Cannot use direct refinement in non-dynamic mode.");
-
-   Vector2i input_shape((*input_out)->GetRgbSize().width, (*input_out)->GetRgbSize().height);
+  
+  Vector2i input_shape((*input_out)->GetRgbSize().width, (*input_out)->GetRgbSize().height);
   
   //将所有的对象集成到该系统中
   *dense_slam_out = new DenseSlam(
-      driver,
+      itmDriver,
       orbDriver,
       sparse_sf_provider,
       input_shape,
@@ -332,7 +281,6 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
       right_color_proj.cast<float>(),
       baseline_m,
       FLAGS_direct_refinement,
-      FLAGS_dynamic_mode,
       FLAGS_fusion_every
   );
 }

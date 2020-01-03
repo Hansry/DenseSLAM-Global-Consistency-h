@@ -22,6 +22,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   
   bool first_frame = (current_frame_no_ == 0);
       
+  /// @brief 更新当前buf存储的color image和 depth 
   utils::Tic("Read input and compute depth");
   if(!input->ReadNextFrame()) {
     throw runtime_error("Could not read input from the data source.");
@@ -40,7 +41,7 @@ void DenseSlam::ProcessFrame(Input *input) {
       orbSLAMInputDepth.at<float>(row,col) = (float)input_raw_depth_image_->at<ushort>(row,col)/1000.0;
     }
   }
-  orbslam_static_scene_trackRGBD(*input_rgb_image_, 
+    orbslam_static_scene_trackRGBD(*input_rgb_image_, 
 				 orbSLAMInputDepth, 
 				 (double)current_frame_no_);
   });  
@@ -68,14 +69,14 @@ void DenseSlam::ProcessFrame(Input *input) {
 				     lastKeyFrameTimeStamp));
     
     /// NOTE 这里由于显卡内存不足，只能在创建新子地图的时候将前一个子地图给remove掉
-    if(todoList.size()>1){
+//    if(todoList.size()>1){
 //       static_scene_->GetMapManager()->removeLocalMap(todoList.front().dataId);
 //       int swapOutLocalMapID = todoList[todoList.size()-2].dataId;
 //       future<void> swap_out = async(launch::async, [this, &swapOutLocalMapID]{
 // 	   saveLocalMapToHostMemory(swapOutLocalMapID);
 //       });
-    }
-    shouldCreateNewLocalMap = false;
+//    }
+//    shouldCreateNewLocalMap = false;
   }
   
   currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
@@ -170,6 +171,7 @@ void DenseSlam::ProcessFrame(Input *input) {
       if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
          utils::Tic("Static map fusion");
 	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
+// 	 static_scene_->TrackLocalMap(currentLocalMap);/////delete after
          static_scene_->IntegrateLocalMap(currentLocalMap);
          static_scene_->PrepareNextStepLocalMap(currentLocalMap);
          utils::TocMicro();

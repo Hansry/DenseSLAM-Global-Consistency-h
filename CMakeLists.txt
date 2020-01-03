@@ -99,7 +99,7 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 include_directories(${Viso2_INCLUDE_DIRS})
 include_directories(${Pangolin_INCLUDE_DIRS})
 include_directories(${OpenCV_INCLUDE_DIRS})
-# include_directories(${Sophus_INCLUDE_DIRS})
+include_directories(${Sophus_INCLUDE_DIRS})
 
 message(${PROJECT_SOURCE_DIR})
 
@@ -107,7 +107,7 @@ message(${PROJECT_SOURCE_DIR})
 #add_subdirectory(src/InfiniTAM/InfiniTAM)
 add_subdirectory(src/InfiniTAM-Global-Consistency-h/InfiniTAM)
 add_subdirectory(src/DenseSLAM/InstRecLib)
-add_subdirectory(src/ORB-SLAM2-API-M)
+# add_subdirectory(src/ORB-SLAM2-API-M)
 
 #add_subdirectory(src/ORB-SLAM2-API-M/Thirdparty/DBoW2)
 #add_subdirectory(src/ORB-SLAM2/Thirdparty/g2o)
@@ -194,10 +194,8 @@ target_link_libraries(DenseSLAMGUI InstRecLib)
 target_link_libraries(DenseSLAMGUI ${OpenCV_LIBS})
 target_link_libraries(DenseSLAMGUI gflags)
 target_link_libraries(DenseSLAMGUI ${Viso2_LIBS})
-#target_link_libraries(DynSLAM ${PROJECT_SOURCE_DIR}/src/ORB-SLAM2-API-M/Thirdparty/DBoW2/lib/libDBoW2.so)
 target_link_libraries(DenseSLAMGUI ${PROJECT_SOURCE_DIR}/src/ORB-SLAM2-API-M/lib/libORB_SLAM2.so)
-#target_link_libraries(DynSLAMGUI ${PROJECT_SOURCE_DIR}/src/ORB-SLAM2-API-M/Thirdparty/g2o/lib/libg2o.so)
-#target_link_libraries(DynSLAMGUI ${PROJECT_SOURCE_DIR}/src/ORB-SLAM2-API-M/Thirdparty/DBoW2/lib/libDBoW2.so)
+
 
 #if(WITH_BACKWARDS_CPP)
   # Link against libbfd to ensure backward-cpp can extract additional information from the binary,

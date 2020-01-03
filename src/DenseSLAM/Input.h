@@ -32,15 +32,12 @@ class Input {
     /// \brief Maximum depth to keep when computing depth maps.
     float max_depth_m = -1.0f;
 
-    // These are optional, and only used for precomputed depth/segmentation.
+    // These are optional, and only used for precomputed depth.
     std::string depth_folder = "";
     std::string depth_fname_format = "";
     // Whether we read direct metric depth from the file, or just disparity values expressed in
     // pixels.
     bool read_depth = false;
-    // No format specifier for segmentation information, since the segmented frames' names are based
-    // on the RGB frame file names. See `PrecomputedSegmentationProvider` for more information.
-    std::string segmentation_folder = "";
 
     // Whether to read ground truth odometry information from an OxTS dump folder (e.g., KITTI
     // dataset), or from a single-file ground truth, as provided with the kitti-odometry dataset.
@@ -75,8 +72,6 @@ class Input {
     config.depth_fname_format     = "%04d.xml";
     config.read_depth             = true;
 
-    config.segmentation_folder    = "seg_image_2/mnc";
-
     config.odometry_oxts          = false;
     config.odometry_fname         = "ground-truth-poses.txt";
 
@@ -86,77 +81,11 @@ class Input {
     return config;
   };
 
-  /// The structure of the tracking dataset is a bit different, and there's no one folder per, so we
-  /// must explicitly specify the sequence number (ID).
-  /// WARNING: no gray data available for the tracking benchmark sequences.
-  /// Details and downloads: http://www.cvlibs.net/datasets/kitti/eval_tracking.php
-  static Config KittiTrackingConfig(int sequence_id) {
-    Config config;
-    config.dataset_name           = utils::Format("kitti-tracking-sequence-%04d", sequence_id);
-
-    config.left_gray_folder       = utils::Format("image_02/%04d/", sequence_id);
-    config.right_gray_folder      = utils::Format("image_03/%04d/", sequence_id);
-    config.left_color_folder      = utils::Format("image_02/%04d/", sequence_id);
-    config.right_color_folder     = utils::Format("image_03/%04d/", sequence_id);
-    config.fname_format           = "%06d.png";
-    config.calibration_fname      = utils::Format("calib/%04d.txt", sequence_id);
-
-    config.min_depth_m = 0.5f;
-    config.max_depth_m = 30.0f;
-    config.depth_folder           = utils::Format("precomputed-depth/%04d/Frames", sequence_id);
-    config.depth_fname_format     = "%04d.xml";
-    config.read_depth = true;
-    config.segmentation_folder    = utils::Format("seg_image_02/%04d/mnc", sequence_id);
-
-    config.odometry_oxts          = false;
-    config.odometry_fname         = "";
-
-    config.velodyne_folder        = utils::Format("velodyne/%04d/", sequence_id);
-    config.velodyne_fname_format  = "%06d.bin";
-
-    config.tracklet_folder        = utils::Format("label_02/%04d.txt", sequence_id);
-    return config;
-  }
-
-  static Config KittiTrackingDispnetConfig(int sequence_id) {
-    Config config                 = KittiTrackingConfig(sequence_id);
-    config.depth_folder           = utils::Format("precomputed-depth-dispnet/%04d", sequence_id);
-    config.depth_fname_format     = "%06d.pfm";
-    config.read_depth             = false;
-    return config;
-  }
-
-  static Config KittiOdometryLowresConfig(float factor) {
-    Config config = KittiOdometryConfig();
-    config.left_gray_folder       = utils::Format("image_0_%.2f", factor);
-    config.right_gray_folder      = utils::Format("image_1_%.2f", factor);
-    config.left_color_folder      = utils::Format("image_2_%.2f", factor);
-    config.right_color_folder     = utils::Format("image_3_%.2f", factor);
-
-    config.depth_folder           = utils::Format("precomputed-depth-elas-%.2f/Frames", factor);
-    config.segmentation_folder    = utils::Format("seg_image_2-%.2f/mnc", factor);
-
-    return config;
-  }
-
   static Config KittiOdometryDispnetConfig() {
     Config config                 = KittiOdometryConfig();
     config.depth_folder           = "precomputed-depth-dispnet";
     config.depth_fname_format     = "%06d.pfm";
     config.read_depth             = false;
-    return config;
-  }
-
-  static Config KittiOdometryDispnetLowresConfig(float factor) {
-    Config config = KittiOdometryDispnetConfig();
-    config.left_gray_folder       = utils::Format("image_0_%.2f", factor);
-    config.right_gray_folder      = utils::Format("image_1_%.2f", factor);
-    config.left_color_folder      = utils::Format("image_2_%.2f", factor);
-    config.right_color_folder     = utils::Format("image_3_%.2f", factor);
-
-    config.depth_folder           = utils::Format("precomputed-depth-dispnet-%.2f", factor);
-    config.segmentation_folder    = utils::Format("seg_image_2-%.2f/mnc", factor);
-
     return config;
   }
 
@@ -186,13 +115,9 @@ class Input {
   //判断是否还有剩余的图片
   bool HasMoreImages() const;
 
-  /// \brief Advances the input reader to the next frame.
-  /// \returns True if the next frame's files could be read successfully.
   /// \brief 讲读取器推进到下一帧，如果下一帧读取成功则返回True
   bool ReadNextFrame();
 
-  /// \brief Returns pointers to the latest RGB and depth data.
-  /// \note The caller does not take ownership.
   /// \brief 返回最新RGB和深度图的指针
   void GetCvImages(cv::Mat3b **rgb, cv::Mat1s **raw_depth);
 
@@ -272,10 +197,7 @@ class Input {
 //  cv::Mat1s raw_depth_small(static_cast<int>(round(GetDepthSize().height * input_scale_)),
 //  static_cast<int>(round(GetDepthSize().width * input_scale_)));
 
-  static std::string GetFrameName(const std::string &root,
-                                  const std::string &folder,
-                                  const std::string &fname_format,
-                                  int frame_idx) {
+  static std::string GetFrameName(const std::string &root, const std::string &folder, const std::string &fname_format, int frame_idx) {
     return root + "/" + folder + "/" + utils::Format(fname_format, frame_idx);
   }
 

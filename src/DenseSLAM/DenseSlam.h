@@ -37,11 +37,6 @@ struct TodoListEntry {
       int endKeyframeTimeStamp;
 };
 
-// TODO(andrei): Get rid of ITM-specific image objects for visualization.
-/// \brief The central class of the DynSLAM system.
-/// It processes input stereo frames and generates separate maps for all encountered object
-/// instances, as well one for the static background.
-/// 处理双目输入帧，对于所有遇到的物体使其地图从静态背景地图从分离
 class DenseSlam {
  public:
   DenseSlam(InfiniTamDriver *itm_static_scene_engine,
@@ -52,7 +47,6 @@ class DenseSlam {
           const Eigen::Matrix34f& proj_right_rgb,
           float stereo_baseline_m,
           bool enable_direct_refinement,
-          bool dynamic_mode,
           int fusion_every)
     : static_scene_(itm_static_scene_engine),
       orbslam_static_scene_(orb_static_engine),
@@ -65,7 +59,6 @@ class DenseSlam {
       current_frame_no_(0),
       input_width_(input_shape.x),
       input_height_(input_shape.y),
-      dynamic_mode_(dynamic_mode),
       pose_history_({ Eigen::Matrix4f::Identity() }),
       projection_left_rgb_(proj_left_rgb),
       projection_right_rgb_(proj_right_rgb),
@@ -193,10 +186,6 @@ class DenseSlam {
     return stereo_baseline_m_;
   }
 
-  bool IsDynamicMode() const {
-    return dynamic_mode_;
-  }
-
   /// \brief Run voxel decay all the way up to the latest frame.
   /// Useful for cleaning up at the end of the sequence. Should not be used mid-sequence.
 //   void StaticMapDecayCatchup() {
@@ -279,16 +268,14 @@ private:
   
   /// NOTE 判断是否开启新地图的阈值
   const int N_originalblocks = 1000;
-  const float F_originalBlocksThreshold = 0.15f; //0.4f
+  ///const float F_originalBlocksThreshold = 0.15f; //0.4f
+  
+  /// 将F_originalBlocksThreadhold设为-1.0,意味这暂时不开启新的地图
+  const float F_originalBlocksThreshold = -1.0f;
   bool shouldCreateNewLocalMap = false;
   bool shouldClearPoseHistory = false;
   
   ITMLib::Engine::ITMLocalMap* currentLocalMap = NULL;
-  
-  /// \brief Enables object-awareness, object reconstruction, etc. Without this, the system is
-  ///        basically just outdoor InfiniTAM.
-  /// \brief 重要的参数，启动物体检测、物体重建等功能，如果没有该功能，那么就只是基于InfiniTAM了
-  bool dynamic_mode_;
 
   /// \brief If dynamic mode is on, whether to force instance reconstruction even for non-dynamic
   /// objects, like parked cars. All experiments in the thesis are performed with this 'true'.

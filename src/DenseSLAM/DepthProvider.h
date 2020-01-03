@@ -1,4 +1,3 @@
-
 #ifndef DENSESLAM_DEPTHPROVIDER_H
 #define DENSESLAM_DEPTHPROVIDER_H
 
@@ -75,24 +74,20 @@ class DepthProvider {
   /// \brief 从双目图像中计算视差图
   virtual void DisparityMapFromStereo(const cv::Mat &left,
                                       const cv::Mat &right,
-                                      cv::Mat &out_disparity) = 0;
+                                      cv::Mat &out_disparity) = 0; //将在PrecomputedDepthProvider进行实现
 
-  /// \brief 将视差图转为深度图，单位为m，d=baseline*fx/disparity
+  /// \brief 将视差图转为深度图，单位为m，d=baseline*fx/disparity，在precomputedDepthProvider这个类中会被override
   virtual float DepthFromDisparity(const float disparity_px,
                                    const StereoCalibration &calibration) {
     return (calibration.baseline_meters * calibration.focal_length_px) / disparity_px;
   }
 
-  // TODO-LOW(andrei): This can be sped up trivially using CUDA.
-  /// \brief Computes a depth map from a disparity map using the `DepthFromDisparity` function at
-  /// every pixel.
-  /// \tparam T The type of the elements in the disparity input.
-  /// \param disparity The disparity map.
-  /// \param calibration The stereo calibration parameters used to compute depth from disparity.
-  /// \param out_depth The output depth map, which gets populated by this method.
-  /// \param scale Used to adjust the depth-from-disparity formula when using reduced-resolution
-  ///              input. Unless evaluating the system's performance on low-res input, this should
-  ///              be set to 1.
+  /// @brief 使用'DepthFromDisparity'函数从视差图计算深度图，应该可以用CUDA进行加速才对
+  /// @param T 输入的视差图的类型
+  /// @param disparity 视差图
+  /// @param calibration 用来从视差图计算深度的双目标定参数
+  /// \param out_depth 输出的深度图
+  /// \param scale 当输入的图片是低像素的时候，用来调整depth-from-disparity方程，除非用低像素的图片来进行评估，在这种情况下，则scale=1
   /// 使用模板可以很好的适应输入的视差图的类型
   template<typename T>
   void DepthFromDisparityMap(const cv::Mat_<T> &disparity,
@@ -108,14 +103,13 @@ class DepthProvider {
     int32_t min_depth_mm = static_cast<int32_t>(min_depth_m_ * kMetersToMillimeters);//kMetersToMillimeters=1000.0f
     int32_t max_depth_mm = static_cast<int32_t>(max_depth_m_ * kMetersToMillimeters);
 
-    // InfiniTAM requires short depth maps, so we need to ensure our depth can actually fit in a
-    // short.
+    // InfiniTAM requires short depth maps, so we need to ensure our depth can actually fit in a short (16位).
     // std::numeric_limits<int16_t>::max()返回的是编译器允许的int16_t型数的最大值:2^{16}-1
     int32_t max_representable_depth = std::numeric_limits<int16_t>::max();
     if (max_depth_mm >= max_representable_depth) {
       throw std::runtime_error(utils::Format("Unsupported maximum depth of %f meters (%d mm, "
                                                  "larger than the %d limit).", max_depth_m_,
-                                             max_depth_mm, max_representable_depth));
+                                                  max_depth_mm, max_representable_depth));
     }
 
     //遍历视差图
@@ -132,7 +126,8 @@ class DepthProvider {
         if (depth_mm > max_depth_mm || depth_mm < min_depth_mm) {
           depth_mm = 0;
         }
-
+        
+        //将深度保存为mm的精度，同时以16位进行存储
         int16_t depth_mm_short = static_cast<int16_t>(depth_mm);
         out_depth.at<int16_t>(i, j) = depth_mm_short;
       }
@@ -163,18 +158,18 @@ class DepthProvider {
   }
 
  protected:
-  /// \param input_is_depth 输入是深度图还是视差图
-  /// \param min_depth_m 最小深度
-  /// \param max_depth_m 最大深度
+  /// @param input_is_depth 输入是深度图还是视差图
+  /// @param min_depth_m 最小深度
+  /// @param max_depth_m 最大深度
+  /// @Note 构造函数放在protected类型中
   explicit DepthProvider(bool input_is_depth, float min_depth_m, float max_depth_m) :
       input_is_depth_(input_is_depth),
       min_depth_m_(min_depth_m),
       max_depth_m_(max_depth_m) {}//显示构造函数，表明该构造函数不能被隐式转换
 
-  /// \brief If true, then assume the read maps are depth maps, instead of disparity maps.
-  /// In this case, the depth from disparity computation is no longer performed.
+  /// @Note 如果input_is_depth=true_，那么输入为深度图，计算视差图的函数将不会被计算
   bool input_is_depth_;
-  /// \brief Buffer in which the disparity map gets saved at every frame.
+  /// @brief Buffer in which the disparity map gets saved at every frame.
   cv::Mat out_disparity_;
 
  private:
