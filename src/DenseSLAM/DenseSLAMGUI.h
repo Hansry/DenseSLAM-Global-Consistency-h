@@ -12,11 +12,14 @@
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include <pangolin/pangolin.h>
+#include<stdlib.h>
 
 #include "DenseSlam.h"
 #include "PrecomputedDepthProvider.h"
 #include "InstRecLib/VisoSparseSFProvider.h"
 #include "DSHandler3D.h"
+#include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
 
 namespace SparsetoDense{
 namespace gui{
@@ -174,22 +177,25 @@ protected:
   pangolin::View rgb_view_;
   pangolin::View depth_view_;
   pangolin::View raycast_depth_view_;
-  pangolin::View segment_view_;
-  pangolin::View object_view_;
-  pangolin::View object_reconstruction_view_;
+  /**
   pangolin::View *orb_trajectory_view_;
   pangolin::View *dense_map_fpv_view_; //first person view
-
+  **/
+  
   pangolin::OpenGlMatrix proj_;
   pangolin::OpenGlRenderState *pane_cam_;
   pangolin::OpenGlRenderState *orb_pane_cam_;
-  pangolin::OpenGlRenderState *instance_cam_;
+  
+  /**
   pangolin::OpenGlRenderState *orb_Trajectory_pane_cam_;
   pangolin::OpenGlRenderState *dense_map_pane_cam_;
-
+  **/
+  
   // Graph plotter and its data logger object
-  pangolin::Plotter *plotter_;
-  pangolin::DataLog data_log_;
+  pangolin::Plotter *plotter_track;
+  pangolin::Plotter *plotter_memory;
+  pangolin::DataLog data_log_track;
+  pangolin::DataLog data_log_memory;
 
   //图片纹理定义
   pangolin::GlTexture *pane_texture_;

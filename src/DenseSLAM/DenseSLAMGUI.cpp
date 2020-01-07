@@ -90,7 +90,7 @@ void PangolinGui::Run(){
       /// NOTE 是否在chase cam模式下预览重建，第三视角
       if (paramGUI.chase_cam) 
       {
-        Eigen::Matrix4f cam_mv = dense_slam_->GetPose();
+        Eigen::Matrix4f cam_mv = dense_slam_->GetPose().inverse();
         pangolin::OpenGlMatrix pm(cam_mv);
         pm =
             // Good for odo 05
@@ -160,15 +160,11 @@ void PangolinGui::Run(){
       rgb_view_.Activate();
       glColor3f(1.0f, 1.0f, 1.0f);
       /// NOTE  当前帧大于1，对RGB图片进行预览。 
-      /// 若启动动态模式，则显示的检测动态物体的RGB图像，不启动动态检测的时候， 则显示的是ORB特征点的RGB图片
+      /// 显示的是ORB特征点的RGB图片
       if(dense_slam_->GetCurrentFrameNo() >= 1){
       cv::Mat im = dense_slam_->GetOrbSlamFrameDrawerGlobal()->DrawFrame();
 	UploadCvTexture(im, *pane_texture_, true, GL_UNSIGNED_BYTE);
 	pane_texture_->RenderToViewport(true);
-      }
-     
-      if (dense_slam_->GetCurrentFrameNo() > 1 && preview_sf_->Get()) {
-          PreviewSparseSF(dense_slam_->GetLatestFlow().matches, rgb_view_);
       }
         
       bool enable_compositing_dense = (paramGUI.evaluation_delay == 0);
@@ -199,11 +195,12 @@ void PangolinGui::Run(){
       pane_texture_->RenderToViewport(true);
             
       /// NOTE 以第一视角观察orbslam以及稠密地图的第一视角
+      /*
       if(dense_slam_->GetCurrentFrameNo()>=1){
-	  orb_trajectory_view_->Activate(*orb_Trajectory_pane_cam_);
-	  glColor3f(1.0,1.0,1.0);
-	  // OrbSlamMapDrawer_->DrawTracjectory();
-          orb_Trajectory_pane_cam_->Follow(OrbSlamTwc_);
+// 	  orb_trajectory_view_->Activate(*orb_Trajectory_pane_cam_);
+// 	  glColor3f(1.0,1.0,1.0);
+// 	  // OrbSlamMapDrawer_->DrawTracjectory();
+//           orb_Trajectory_pane_cam_->Follow(OrbSlamTwc_);
 	if(sparseMap_show_graph_->Get()){
 	  OrbSlamMapDrawer_->DrawCurrentCamera(OrbSlamTwc_);
 	}
@@ -222,9 +219,9 @@ void PangolinGui::Run(){
         preview_dense = dense_slam_->GetMapRaycastPreview(dense_map_pane_cam_->GetModelViewMatrix(),
                   static_cast<PreviewType>(current_preview_type_),enable_compositing_dense);
         pane_texture_dense_->Upload(preview_dense, GL_RGBA, GL_UNSIGNED_BYTE);
-        pane_texture_dense_->RenderToViewport(true);
-        
+        pane_texture_dense_->RenderToViewport(true); 
       }
+      */
       
       *(NumFrame) = Format("%d", dense_slam_->GetCurrentFrameNo());
       *(NumKeyFrame) = Format("%d", dense_slam_->GetKeyFrameNum());
@@ -249,35 +246,6 @@ void PangolinGui::Run(){
         pangolin::SaveWindowOnRender(kRecordingRoot + "/" + frame_fname);
       }
     }
-}
-
-void PangolinGui::PreviewSparseSF(const std::vector<RawFlow,Eigen::aligned_allocator<RawFlow> >& flow, const pangolin::View& view){
-    // pangolin::GlFont &font = pangolin::GlFont::I();
-    Eigen::Vector2f frame_size(width_, height_);
-//    font.Text("libviso2 scene flow preview").Draw(-0.90f, 0.89f);
-
-    // We don't need z-checks since we're rendering UI stuff.
-    glDisable(GL_DEPTH_TEST);
-    for(const RawFlow &match : flow) {
-      Eigen::Vector2f bounds(segment_view_.GetBounds().w, segment_view_.GetBounds().h);
-
-      // Very hacky way of making the lines thicker
-      for (int xof = -1; xof <= 1; ++xof) {
-        for (int yof = -1; yof <= 1; ++yof) {
-          Eigen::Vector2f of(xof, yof);
-          Eigen::Vector2f gl_pos = PixelsToGl(match.curr_left + of, frame_size, bounds);
-          Eigen::Vector2f gl_pos_old = PixelsToGl(match.prev_left + of, frame_size, bounds);
-
-          Eigen::Vector2f delta = gl_pos - gl_pos_old;
-          float magnitude = 15.0f * static_cast<float>(delta.norm());
-
-          glColor4f(max(0.2f, min(1.0f, magnitude)), 0.4f, 0.4f, 1.0f);
-          pangolin::glDrawCircle(gl_pos.cast<double>(), 0.010f);
-          pangolin::glDrawLine(gl_pos_old[0], gl_pos_old[1], gl_pos[0], gl_pos[1]);
-        }
-      }
-    }
-    glEnable(GL_DEPTH_TEST);
 }
 
 void PangolinGui::DiffDepthmaps(const cv::Mat1s& input_depthmap, 
@@ -516,26 +484,19 @@ void PangolinGui::CreatePangolinDisplays(){
 	                             3.0, -2.5, 50,
 			             0, 1, 0));
    
-    
+    /**
     orb_Trajectory_pane_cam_ = new pangolin::OpenGlRenderState(
        proj_,
        pangolin::ModelViewLookAtRDF(0, -1.5, 15,
 	                             0, -1.5, 50,
 			             0, 1, 0));
     
-    instance_cam_ = new pangolin::OpenGlRenderState(
-        proj_,
-        pangolin::ModelViewLookAtRDF(
-          -0.8, -0.20,  -3,
-          -0.8, -0.20,  15,
-          0, 1, 0)
-    );
-    
     dense_map_pane_cam_ = new pangolin::OpenGlRenderState(
       proj_,
       pangolin::ModelViewLookAtRDF(0, -1.5, 15,
 	                             0, -1.5, 50,
 			             0, 1, 0));
+    **/
 
     float aspect_ratio = static_cast<float>(width_) / height_;//宽高比
     rgb_view_ = pangolin::Display("rgb").SetAspect(aspect_ratio);
@@ -566,7 +527,7 @@ void PangolinGui::CreatePangolinDisplays(){
                     camera_zoom_scale));
     
     //用于显示OrbSLAM的位姿
-
+    /*
     orb_trajectory_view_ = &(pangolin::Display("orbslam_trajectory"));
     orb_trajectory_view_->SetHandler(
       new DSHandler3D(orb_Trajectory_pane_cam_,
@@ -579,30 +540,41 @@ void PangolinGui::CreatePangolinDisplays(){
 	   pangolin::AxisY,
            camera_translation_scale,
            camera_zoom_scale));
+    */
     //主要的一些细节部分
     detail_views_ = &(pangolin::Display("detail"));
     detail_views_raycast = &(pangolin::Display("detail_raycast"));
 
     // Add labels to our data logs (and automatically to our plots).
-    /*
-       data_log_.SetLabels({"Active tracks",
-                         "Free GPU Memory (100s of MiB)",
-                         "Static map memory usage (100s of MiB)",
-                         "Static map memory usage without decay (100s of Mib)",
-                        });
-
+    data_log_memory.SetLabels({
+                      "Free GPU Memory (100s of MiB)",
+		      "Total GPU Memory (100s of MiB)",
+                      "Static map memory usage (100s of MiB)",
+                     });
+    
     // OpenGL 'view' of data such as the number of actively tracked instances over time.
-       float tick_x = 1.0f;
-       float tick_y = 1.0f;
-       plotter_ = new pangolin::Plotter(&data_log_, 0.0f, 200.0f, -0.1f, 25.0f, tick_x, tick_y);
-       plotter_->Track("$i");  // This enables automatic scrolling for the live plots.
-    */
-
+    float tick_x = 1.0f;
+    float tick_y = 1.0f;
+    plotter_memory = new pangolin::Plotter(&data_log_memory, 0.0f, 200.0f, -0.1f, 25.0f, tick_x, tick_y);
+    plotter_memory->Track("$i");  // This enables automatic scrolling for the live plots.
+    
+    data_log_track.SetLabels({ "OrbSLAM tracking Intensity (the number of inliers)"});
+    plotter_track = new pangolin::Plotter(&data_log_track, 0.0f, 200.0f, -0.1f, 500.0f, tick_x, tick_y);
+    plotter_track->Track("$i");
+       
     //main_views:指的是融合后的地图
     //detail_views:指的是static_rgb、 static_depth、 segment_view_、object_view
     //SetBounds(bottom, top, left, right)
     main_view_->SetBounds(pangolin::Attach::Pix(height_ *2.0), pangolin::Attach::Pix(height_ * 3.0), pangolin::Attach::Pix(kUiWidth*1.2), pangolin::Attach::Pix(kUiWidth*1.2+width_));
     orbslam_view_->SetBounds(pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(height_ * 2.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
+    detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
+    detail_views_->SetLayout(pangolin::LayoutEqual)
+      .AddDisplay(rgb_view_)
+      .AddDisplay(depth_view_)
+      .AddDisplay(*plotter_memory)
+      .AddDisplay(*plotter_track);
+    
+    /*
     detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_*(1.0/3.0)));
     detail_views_->SetLayout(pangolin::LayoutEqual)
       .AddDisplay(rgb_view_)
@@ -613,6 +585,7 @@ void PangolinGui::CreatePangolinDisplays(){
     dense_map_fpv_view_->SetBounds(pangolin::Attach::Pix(height_*0.32), pangolin::Attach::Pix(height_*1.0), 
 				      pangolin::Attach::Pix(kUiWidth+width_*(2.0/3.0)),
 				      pangolin::Attach::Pix(kUiWidth+width_));
+    */
     // Internally, InfiniTAM stores these as RGBA, but we discard the alpha when we upload the
     // textures for visualization (hence the 'GL_RGB' specification).
     this->pane_texture_ = new pangolin::GlTexture(width_, height_, GL_RGB, false, 0, GL_RGB,GL_UNSIGNED_BYTE);
@@ -625,15 +598,41 @@ void PangolinGui::CreatePangolinDisplays(){
 void PangolinGui::ProcessFrame(){
     cout << endl << "[Starting frame " << dense_slam_->GetCurrentFrameNo() + 1 << "]" << endl;
     
+    if (! dense_slam_input_->HasMoreImages()){
+      getchar();
+    }
+    
     if (! dense_slam_input_->HasMoreImages() && paramGUI.close_on_complete) {
       cerr << "No more images, Bye!" << endl;
       pangolin::QuitAll();
       return;
     }
-    
+      
     Tic("DynSLAM frame");
     // Main workhorse function of the underlying SLAM system.
     dense_slam_->ProcessFrame(this->dense_slam_input_);
+    
+    size_t free_gpu_memory_bytes;
+    size_t total_gpu_memory_bytes;
+    cudaMemGetInfo(&free_gpu_memory_bytes, &total_gpu_memory_bytes);
+    
+    const double kBytesToGb = 1.0 / 1024.0 / 1024.0 / 1024.0;
+    double free_gpu_gb = static_cast<float>(free_gpu_memory_bytes) * kBytesToGb;    
+    double total_gpu_gb = static_cast<float>(total_gpu_memory_bytes) * kBytesToGb;  
+    
+    size_t currLocalMapUsedMemory = dense_slam_->GetStaticMapMemoryBytes();
+    double curr_LocalMap_used_gpu_gb = static_cast<float>(currLocalMapUsedMemory) * kBytesToGb;  
+
+    //由于计算出来的free_gpu_gb等均为以G为单位的，因此乘上10转化为以（100MB的显示）
+    data_log_memory.Log(
+      static_cast<float>(free_gpu_gb) * 10.24f, 
+      static_cast<float>(total_gpu_gb) * 10.24f,
+      static_cast<float>(curr_LocalMap_used_gpu_gb)*10.24f
+    );
+    
+    int orbslamTrackIntensity = dense_slam_->mTrackIntensity;
+    data_log_track.Log(orbslamTrackIntensity);
+
     int64_t frame_time_ms = Toc(true);
     float fps = 1000.0f / static_cast<float>(frame_time_ms);
     cout << "[Finished frame " << dense_slam_->GetCurrentFrameNo() << " in " << frame_time_ms

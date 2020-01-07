@@ -104,10 +104,10 @@ include_directories(${Sophus_INCLUDE_DIRS})
 message(${PROJECT_SOURCE_DIR})
 
 # TODO(andrei): You may want to have these dependencies in src/DynSLAM/CMakeLists.txt.
-#add_subdirectory(src/InfiniTAM/InfiniTAM)
+# add_subdirectory(src/InfiniTAM/InfiniTAM)
+add_subdirectory(src/ORB-SLAM2-API-M)
 add_subdirectory(src/InfiniTAM-Global-Consistency-h/InfiniTAM)
 add_subdirectory(src/DenseSLAM/InstRecLib)
-# add_subdirectory(src/ORB-SLAM2-API-M)
 
 #add_subdirectory(src/ORB-SLAM2-API-M/Thirdparty/DBoW2)
 #add_subdirectory(src/ORB-SLAM2/Thirdparty/g2o)

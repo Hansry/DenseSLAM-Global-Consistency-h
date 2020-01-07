@@ -192,6 +192,7 @@ public:
   void PrepareNextStepLocalMap(const ITMLocalMap* currLocalMap){
      const ITMRenderState_VH *renderState_vh = (ITMRenderState_VH*) (currLocalMap->renderState);
      if(renderState_vh->noVisibleEntries>0){
+        
         this->trackingController->Prepare(currLocalMap->trackingState, 
 					  currLocalMap->scene, 
 					  this->view, 

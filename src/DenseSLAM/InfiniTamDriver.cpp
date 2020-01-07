@@ -66,15 +66,11 @@ ITMLib::Objects::ITMRGBDCalib* CreateItmCalib(const Eigen::Matrix<double, 3, 4> 
   float sizeY = frame_size(1);
   intrinsics.SetFrom(fx, fy, cx, cy, sizeX, sizeY);
 
-  // Our intrinsics are always the same for RGB and depth since we compute depth from stereo.
-  // TODO-LOW(andrei): But not if we compute the depth map from the gray camera frames, which have a
-  // subtle-but-non-negligible offset from the color ones. Note that for now we're simply computing
   // all depth maps using the RGB inputs.
   calib->intrinsics_rgb = intrinsics;
   calib->intrinsics_d = intrinsics;
 
-  // RGB和depth是同个相机，因此其相对位姿为单位矩阵
-  // TODO-LOW(andrei): Not necessarily. See above.
+  // RGB和depth的变换矩阵，RGB和depth是同个相机，因此其相对位姿为单位矩阵
   Matrix4f identity; identity.setIdentity();
   calib->trafo_rgb_to_depth.SetFrom(identity);
 
@@ -175,7 +171,7 @@ Matrix4f EigenToItm(const Eigen::Matrix4f &eigen_matrix) {
   return res;
 }
 
-/// @brief 得到InfiniTAM地图中在model_view视角下的图片,float类型
+/// @brief 得到InfiniTAM地图中在model_view视角下的图片,char类型
 void InfiniTamDriver::GetImage(ITMUChar4Image *out,
                                SparsetoDense::PreviewType get_image_type,
                                const pangolin::OpenGlMatrix &model_view,

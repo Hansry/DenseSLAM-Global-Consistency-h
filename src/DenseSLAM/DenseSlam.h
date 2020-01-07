@@ -65,8 +65,11 @@ class DenseSlam {
       stereo_baseline_m_(stereo_baseline_m),
       experimental_fusion_every_(fusion_every) 
   {
+    nFeatures_ = ExtractKeyPointNum();
   }
-
+public:
+  int mTrackIntensity = 0;
+  int mPreTrackIntensity = 0;
   /// \brief Reads in and processes the next frame from the data source.
   /// This is where most of the interesting stuff happens.
   void ProcessFrame(Input *input);
@@ -152,10 +155,6 @@ class DenseSlam {
     return pose_history_;
   }
 
-//   size_t GetStaticMapMemoryBytes() const {
-//     return static_scene_->GetUsedMemoryBytes();
-//   }
-// 
 //   size_t GetStaticMapSavedDecayMemoryBytes() const {
 //     return static_scene_->GetSavedDecayMemoryBytes();
 //   }
@@ -237,6 +236,19 @@ class DenseSlam {
     return todoList;
   }
   
+  size_t GetStaticMapMemoryBytes() const{
+    if (currentLocalMap != NULL){
+       return static_scene_->GetLocalMapUsedMemoryBytes(currentLocalMap);
+    }
+    return 0;
+  }
+  
+  int ExtractKeyPointNum(){
+    string fPath = orbslam_static_scene_->getOrbParamFile();
+    cv::FileStorage fSetting(fPath, cv::FileStorage::READ);
+    return fSetting["ORBextractor.nFeatures"];
+  }
+  
   bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
   
   int createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose);
@@ -246,9 +258,8 @@ class DenseSlam {
 private:
   InfiniTamDriver *static_scene_;
   ORB_SLAM2::drivers::OrbSLAMDriver *orbslam_static_scene_;
-//   SegmentationProvider *segmentation_provider_;
-//   InstanceReconstructor *instance_reconstructor_;
   SparseSFProvider *sparse_sf_provider_;
+  int nFeatures_;
 //   dynslam::eval::Evaluation *evaluation_;
   
   std::vector<TodoListEntry> todoList;
@@ -276,11 +287,6 @@ private:
   bool shouldClearPoseHistory = false;
   
   ITMLib::Engine::ITMLocalMap* currentLocalMap = NULL;
-
-  /// \brief If dynamic mode is on, whether to force instance reconstruction even for non-dynamic
-  /// objects, like parked cars. All experiments in the thesis are performed with this 'true'.
-  /// \brief 如果启动动态模式，是否对物体实例进行重构，即使是对停着的车
-  bool always_reconstruct_objects_ = true;
 
  // std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f>> pose_history_;
   std::vector<Eigen::Matrix4f> pose_history_;

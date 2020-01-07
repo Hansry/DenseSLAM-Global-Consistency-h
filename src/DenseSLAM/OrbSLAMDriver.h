@@ -7,6 +7,7 @@
 #include "../ORB-SLAM2-API-M/include/System.h"
 #include "../ORB-SLAM2-API-M/include/MapDrawer.h"
 #include "../ORB-SLAM2-API-M/include/FrameDrawer.h"
+#include "../ORB-SLAM2-API-M/include/Tracking.h"
 #include <Eigen/Core>
 
 namespace ORB_SLAM2{
@@ -25,7 +26,8 @@ public:
     ///OrbSLAMDriver的构造函数
     OrbSLAMDriver(const string &strVocFile, const string &strSettingsFile, 
 		  const eSensor sensor, const bool bUseViewer = true):
-		  ORB_SLAM2::System(strVocFile, strSettingsFile, sensor, bUseViewer){
+		  ORB_SLAM2::System(strVocFile, strSettingsFile, sensor, bUseViewer),
+		  strSettingsFile_(strSettingsFile){
 		   last_egomotion_.setOnes();
 		  };
 		 
@@ -83,8 +85,13 @@ public:
        this->SaveTrajectoryKITTI(saveName);
     }
     
+    string getOrbParamFile() const{
+       return strSettingsFile_;
+    }
+    
 private:
-    Eigen::Matrix4f last_egomotion_;    
+    Eigen::Matrix4f last_egomotion_;
+    string strSettingsFile_;    
 };
 }//driver
 }// ORB_SLAM2

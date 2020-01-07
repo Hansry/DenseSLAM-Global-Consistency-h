@@ -21,7 +21,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   }
   
   bool first_frame = (current_frame_no_ == 0);
-      
+  
   /// @brief 更新当前buf存储的color image和 depth 
   utils::Tic("Read input and compute depth");
   if(!input->ReadNextFrame()) {
@@ -49,11 +49,16 @@ void DenseSlam::ProcessFrame(Input *input) {
   /// NOTE 如果当前帧不是关键帧，那么则不进行融合或者更新，直接就return
   orbslamVO.get();
   lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
+  mTrackIntensity = GetOrbSlamTrackerGlobal()->getMatchInlier();
+  
+//   float threadhold = PDController(mPreTrackIntensity, mTrackIntensity);
+  
+  //在这里实现PD控制器的实现，以及特征点的设置
+  mPreTrackIntensity = mTrackIntensity;
   if((int)lastKeyFrameTimeStamp != current_frame_no_){
         current_frame_no_++;
         return;
   }
-  
   /// NOTE 若当前帧为关键帧，则得到当前帧在世界坐标系下的位姿以及跟踪状态
   orbSLAM2_Pose = orbslam_static_scene_->GetPose();
   orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
@@ -166,6 +171,7 @@ void DenseSlam::ProcessFrame(Input *input) {
 	   pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
     }
   }
+  
   if(FLAGS_useOrbSLAMVO){
       /// NOTE orbSLAMTrackingState == 2 意味着orbslam跟踪成功
       if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
@@ -173,7 +179,7 @@ void DenseSlam::ProcessFrame(Input *input) {
 	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
 // 	 static_scene_->TrackLocalMap(currentLocalMap);/////delete after
          static_scene_->IntegrateLocalMap(currentLocalMap);
-         static_scene_->PrepareNextStepLocalMap(currentLocalMap);
+//          static_scene_->PrepareNextStepLocalMap(currentLocalMap);
          utils::TocMicro();
 
 //    Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
@@ -187,7 +193,7 @@ void DenseSlam::ProcessFrame(Input *input) {
          utils::Tic("Static map fusion");
 	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
          static_scene_->IntegrateLocalMap(currentLocalMap);
-         static_scene_->PrepareNextStepLocalMap(currentLocalMap);
+//          static_scene_->PrepareNextStepLocalMap(currentLocalMap);
          utils::TocMicro();
       }
    }
