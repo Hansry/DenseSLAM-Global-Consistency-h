@@ -9,6 +9,8 @@ const std::string SettingFile = "../data/mini-seq-06/kitti_09_26.yaml";
 
 //将需要的命令行参数使用gflags的宏:DEFINE_xxxx(变量名，默认值，help-string)定义在文件当中，全局变量，存储在区全局区中
 DEFINE_string(dataset_root, "", "The root folder of the dataset or dataset sequence to use.");
+DEFINE_int32(sensor_type, 0, "The sensor type.");
+DEFINE_int32(dataset_type, 0, "Determine to use which dataset.");
 DEFINE_string(ORBvoc, ORBVocPath, "the path to load the ORBvoc.txt");
 DEFINE_string(strSettingFile, SettingFile, "the path to load the setting file for ORBSLAM");
 DEFINE_int32(frame_offset, 0, "The frame index from which to start reading the dataset sequence.");
@@ -41,7 +43,6 @@ DEFINE_int32(fusion_every, 1, "Fuse every kth frame into the map. Used for evalu
 DEFINE_bool(autoplay, false, "Whether to start with autoplay enabled. Useful for batch experiments.");
 DEFINE_bool(useOrbSLAMViewer, false, "Whether to launch the GUI of ORBSLAM2.");
 DEFINE_bool(viewRaycastDepth, false, "Whether to view the raycast depth.");
-
 
 // Note: the [RIP] tags signal spots where I wasted more than 30 minutes debugging a small, sillyzhe
 // issue, which could easily be avoided in the future.
@@ -144,7 +145,10 @@ Eigen::Vector2i GetFrameSize(const string &dataset_root, const Input::Config &co
 /// \brief 构建DenseSLAM对象实例以运行KITTI里程计，libviso为视觉里程计(VO)中的开源算法，包括特征点匹配，位姿估计等
 void BuildDenseSlamKittiOdometry(const string &dataset_root,
                                DenseSlam **dense_slam_out,
-                               Input **input_out) {
+                               Input **input_out,
+			       Input::eSensor sensor_type,
+			       ORB_SLAM2::System::eSensor sensor_type_orbslam,
+			       Input::eDatasetType dataset_type) {
   Input::Config input_config;
   double downscale_factor = FLAGS_scale;//scale = 1(default)
   if (downscale_factor > 1.0 || downscale_factor <= 0.0) {
@@ -152,12 +156,24 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
   }
   float downscale_factor_f = static_cast<float>(downscale_factor);//强制转换为float类型
 
+  //当使用深度的时候，会偏向于使用use_dispnet
+  if(sensor_type == Input::STEREO){
+    FLAGS_use_dispnet = true; 
+  }
   //Odometry 判断是否使用Dispnet以及设置保存深度图文件夹的名称
-  if (FLAGS_use_dispnet) {
-     input_config = Input::KittiOdometryDispnetConfig();
+  if(dataset_type == Input::KITTI){
+     if (FLAGS_use_dispnet) {
+        input_config = Input::KittiOdometryDispnetConfig();
+     }
+     else {
+        input_config = Input::KittiOdometryConfig();
+     }
+  }
+  else if(dataset_type == Input::TUM){
+    input_config = Input::TUMOdometryConfig();
   }
   else {
-     input_config = Input::KittiOdometryConfig();
+    runtime_error("Unspported dataset type!");
   }
 
   Eigen::Matrix34d left_gray_proj;
@@ -197,15 +213,27 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
   //depth = baseline*fx/disparity
   StereoCalibration stereo_calibration(baseline_m, focal_length_px);
 
-  //输入，包含文件夹路径，内参等
+  //输入，包含文件夹路径，内参，以及传感器的类型
   *input_out = new Input(
       dataset_root,
+      sensor_type,
+      dataset_type,
       input_config,
       nullptr,          // set the depth provider later
       frame_size,
       stereo_calibration,
       frame_offset,
       downscale_factor);
+  
+  if(sensor_type == Input::STEREO){
+    input_config.read_depth = false; //读取的是视差图，需要将其转成深度图
+  }
+  else{
+    if(FLAGS_use_dispnet){
+       throw runtime_error("Not supported use dispNet under MONOCULAR and RGBD modes.");
+    }
+    input_config.read_depth = true; //直接读取的是深度图
+  }
   
   //通过预测深度，可以通过从disk读取，也可以实时进行计算
   DepthProvider *depth = new PrecomputedDepthProvider(
@@ -240,7 +268,7 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
   ORB_SLAM2::drivers::OrbSLAMDriver *orbDriver = new ORB_SLAM2::drivers::OrbSLAMDriver(
       FLAGS_ORBvoc,
       FLAGS_strSettingFile,
-      ORB_SLAM2::System::RGBD,
+      sensor_type_orbslam,
       FLAGS_useOrbSLAMViewer
   );
   
@@ -296,6 +324,8 @@ int main(int argc, char **argv) {
   
   //通过使用gflags，在后续代码中可以使用FLAGS_变量名访问对应的命令行参数，而不用像普通的传入argv等参数需要用argv[0],argv[1]等来调用。
   const string dataset_root = FLAGS_dataset_root;
+  const int sensor_type_int = FLAGS_sensor_type;
+  const int dataset_type_int = FLAGS_dataset_type;
   if (dataset_root.empty()) {
     std::cerr << "The --dataset_root=<path> flag must be set." << std::endl;
     return -1;
@@ -303,7 +333,36 @@ int main(int argc, char **argv) {
   
   SparsetoDense::DenseSlam *dense_slam;
   SparsetoDense::Input *input;
-  BuildDenseSlamKittiOdometry(dataset_root, &dense_slam, &input);
+  SparsetoDense::Input::eSensor sensor_type;
+  SparsetoDense::Input::eDatasetType dataset_type;
+  
+  ORB_SLAM2::System::eSensor sensor_type_orbslam;
+  if (sensor_type_int == 0){
+    sensor_type = SparsetoDense::Input::MONOCULAR;
+    sensor_type_orbslam = ORB_SLAM2::System::MONOCULAR;
+    cout << "Monocular" << endl;
+  }
+  else if (sensor_type_int == 1 ){
+    sensor_type = SparsetoDense::Input::STEREO;
+    sensor_type_orbslam = ORB_SLAM2::System::STEREO;
+    cout << "STEREO" << endl;
+  }
+  else{
+    sensor_type = SparsetoDense::Input::RGBD;
+    sensor_type_orbslam = ORB_SLAM2::System::RGBD;
+    cout << "RGB-D" << endl;
+  }
+  
+  if(dataset_type_int == 0){
+    dataset_type = SparsetoDense::Input::KITTI;
+  }
+  else if (dataset_type_int == 1){
+    dataset_type = SparsetoDense::Input::TUM;
+  }
+  else{
+    dataset_type = SparsetoDense::Input::EUROC;
+  }
+  BuildDenseSlamKittiOdometry(dataset_root, &dense_slam, &input, sensor_type, sensor_type_orbslam, dataset_type);
   
   SparsetoDense::gui::ParamSLAMGUI paramGUI;
   paramGUI.autoplay = FLAGS_autoplay;

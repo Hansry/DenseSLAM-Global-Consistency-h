@@ -65,11 +65,14 @@ class DenseSlam {
       stereo_baseline_m_(stereo_baseline_m),
       experimental_fusion_every_(fusion_every) 
   {
-    nFeatures_ = ExtractKeyPointNum();
+      mFeatures_ = ExtractKeyPointNum();
+      mGoalFeatures_ = 0.5 * mFeatures_;
   }
 public:
+  // PD控制器参数
   int mTrackIntensity = 0;
-  int mPreTrackIntensity = 0;
+  float pdThreshold_ = 0.0;
+
   /// \brief Reads in and processes the next frame from the data source.
   /// This is where most of the interesting stuff happens.
   void ProcessFrame(Input *input);
@@ -249,6 +252,15 @@ public:
     return fSetting["ORBextractor.nFeatures"];
   }
   
+  float PDController(int currFeatures, int lastFeatures){
+    float output = mkp*(float)(mGoalFeatures_-currFeatures) + mkd * (float)(lastFeatures-currFeatures)/mDeltaTime_;
+    if (output < 0){
+      output = 0.0;
+    }
+    pdThreshold_ = output;
+    return output;
+  }
+  
   bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
   
   int createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose);
@@ -259,7 +271,6 @@ private:
   InfiniTamDriver *static_scene_;
   ORB_SLAM2::drivers::OrbSLAMDriver *orbslam_static_scene_;
   SparseSFProvider *sparse_sf_provider_;
-  int nFeatures_;
 //   dynslam::eval::Evaluation *evaluation_;
   
   std::vector<TodoListEntry> todoList;
@@ -273,6 +284,16 @@ private:
   int input_width_;
   int input_height_;
   
+  // NOTE PD控制器的参数
+  int mFeatures_;
+  int mGoalFeatures_;
+  int mPreTrackIntensity = 0;
+  float mkp = 0.001;
+  float mkd = 0.0001;
+  ///由于每一帧的时间（包括深度图计算、VO计算、地图融合）接近100ms左右，故delta_t设为0.1ms
+  float mDeltaTime_ = 0.1;
+  
+  // NOTE orbslam的参数
   cv::Mat orbSLAM2_Pose; 
   int orbSLAMTrackingState = 0;
   double lastKeyFrameTimeStamp = 0;

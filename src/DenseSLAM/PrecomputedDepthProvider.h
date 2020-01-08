@@ -7,7 +7,7 @@
 #include "Input.h"
 
 
-/// \brief 视差图是从本地读取的，并不是通过双目进行实时的视差图计算
+/// \brief 视差图和深度图都是从本地读取的，并不是通过双目进行实时的视差图计算
 namespace SparsetoDense {
 
 extern const std::string kDispNetName;
@@ -36,40 +36,11 @@ class PrecomputedDepthProvider : public DepthProvider {
 
   ~PrecomputedDepthProvider() override = default;
 
-  void DisparityMapFromStereo(const cv::Mat &left,
-                              const cv::Mat &right,
-                              cv::Mat &out_disparity) override;
-
+  void DisparityOrDepthMapFromStereo(const cv::Mat &left, const cv::Mat &right, cv::Mat &out_disparity) override;
 
   /// \brief Loads the precomputed depth map for the specified frame into 'out_depth'.
-  void GetDepth(int frame_idx, StereoCalibration &calibration, cv::Mat1s &out_depth, float scale) {
-    if (input_is_depth_) {
-       std::cout << "Will read precomputed depth..." << std::endl;
-       ReadPrecomputed(frame_idx, out_depth);
-       std::cout << "Done reading precomputed depth for specific frame [" << frame_idx << "]." << std::endl;
-       return;
-     }
-
-     ReadPrecomputed(frame_idx, out_disparity_);
-
-     // TODO(andrei): Remove code duplication between this and 'DepthProvider'.
-     if (out_disparity_.type() == CV_32FC1) {
-         DepthFromDisparityMap<float>(out_disparity_, calibration, out_depth, scale);
-     } 
-     else if (out_disparity_.type() == CV_16SC1) {
-        throw std::runtime_error("Unsupported.");
-//      DepthFromDisparityMap<uint16_t>(out_disparity_, calibration, out_depth);
-     } 
-     else {
-          throw std::runtime_error(utils::Format(
-               "Unknown data type for disparity matrix [%s]. Supported are CV_32FC1 and CV_16SC1.", utils::Type2Str(out_disparity_.type()).c_str()
-      ));
-    }
-  }
-  
-  ///@brief 从视差图计算深度
-  float DepthFromDisparity(const float disparity_px, const StereoCalibration &calibration) override;
-
+  void GetDepth(int frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale) override;
+ 
   const std::string &GetName() const override;
 
  protected:

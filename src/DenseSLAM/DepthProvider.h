@@ -21,7 +21,6 @@ namespace SparsetoDense {
 struct StereoCalibration {
   float baseline_meters;
   float focal_length_px;
-
   StereoCalibration(float baseline_meters, float focal_length_px)
       : baseline_meters(baseline_meters), focal_length_px(focal_length_px) {}
 };
@@ -31,8 +30,7 @@ struct StereoCalibration {
 /// return their results into pre-allocated out parameters.
 class DepthProvider {
  public:
-  static constexpr float kMetersToMillimeters = 1000.0f;
-
+    static constexpr float kMetersToMillimeters = 1000.0f;
  public:
   DepthProvider (const DepthProvider&) = default;//默认深拷贝构造函数
   DepthProvider (DepthProvider&&) = default;//默认移动构造函数
@@ -41,24 +39,24 @@ class DepthProvider {
   virtual ~DepthProvider() = default;//虚析构构造函数
 
   /// \brief 从双目图像中计算深度图（Stereo->disparity->depth）
-  virtual void DepthFromStereo(const cv::Mat &left,
+  void DepthFromStereo(const cv::Mat &left,
                                const cv::Mat &right,
                                const StereoCalibration &calibration,
                                cv::Mat1s &out_depth,
                                float scale
   ) {
     if (input_is_depth_) {
-      // Our input is designated as direct depth, not just disparity.
-      DisparityMapFromStereo(left, right, out_depth);
+      // NOTE 若input_is_depth_为true,则DisparityMapFromStereo的out为深度图，反之视差图，若为视差图，则需要进行
+         DisparityOrDepthMapFromStereo(left, right, out_depth);
       return;
     }
 
     // 先计算视差图，再计算深度
-    DisparityMapFromStereo(left, right, out_disparity_);
+    DisparityOrDepthMapFromStereo(left, right, out_disparity_);
 
-    // This should be templated in a nicer fashion...
+    // out_disparity_为视差图
     if (out_disparity_.type() == CV_32FC1) {
-      DepthFromDisparityMap<float>(out_disparity_, calibration, out_depth, scale);
+       DepthFromDisparityMap<float>(out_disparity_, calibration, out_depth, scale);
     } 
     else if (out_disparity_.type() == CV_16SC1) {
       throw std::runtime_error("Cannot currently convert int16_t disparity to depth.");
@@ -72,15 +70,19 @@ class DepthProvider {
   }
 
   /// \brief 从双目图像中计算视差图
-  virtual void DisparityMapFromStereo(const cv::Mat &left,
+  virtual void DisparityOrDepthMapFromStereo(const cv::Mat &left,
                                       const cv::Mat &right,
                                       cv::Mat &out_disparity) = 0; //将在PrecomputedDepthProvider进行实现
+                                      
+  virtual void GetDepth(int frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale) = 0;
 
-  /// \brief 将视差图转为深度图，单位为m，d=baseline*fx/disparity，在precomputedDepthProvider这个类中会被override
-  virtual float DepthFromDisparity(const float disparity_px,
-                                   const StereoCalibration &calibration) {
-    return (calibration.baseline_meters * calibration.focal_length_px) / disparity_px;
-  }
+  /// \brief 将视差图转为深度图，单位为m，d=baseline*fx/disparity
+  float DepthFromDisparity(const float disparity_px, const StereoCalibration &calibration) {
+	     return calibration.focal_length_px * calibration.baseline_meters / disparity_px;
+  };
+				   
+  /// \brief The name of the technique being used for depth estimation.
+  virtual const std::string &GetName() const = 0;
 
   /// @brief 使用'DepthFromDisparity'函数从视差图计算深度图，应该可以用CUDA进行加速才对
   /// @param T 输入的视差图的类型
@@ -103,7 +105,6 @@ class DepthProvider {
     int32_t min_depth_mm = static_cast<int32_t>(min_depth_m_ * kMetersToMillimeters);//kMetersToMillimeters=1000.0f
     int32_t max_depth_mm = static_cast<int32_t>(max_depth_m_ * kMetersToMillimeters);
 
-    // InfiniTAM requires short depth maps, so we need to ensure our depth can actually fit in a short (16位).
     // std::numeric_limits<int16_t>::max()返回的是编译器允许的int16_t型数的最大值:2^{16}-1
     int32_t max_representable_depth = std::numeric_limits<int16_t>::max();
     if (max_depth_mm >= max_representable_depth) {
@@ -126,16 +127,12 @@ class DepthProvider {
         if (depth_mm > max_depth_mm || depth_mm < min_depth_mm) {
           depth_mm = 0;
         }
-        
         //将深度保存为mm的精度，同时以16位进行存储
         int16_t depth_mm_short = static_cast<int16_t>(depth_mm);
         out_depth.at<int16_t>(i, j) = depth_mm_short;
       }
     }
   }
-
-  /// \brief The name of the technique being used for depth estimation.
-  virtual const std::string &GetName() const = 0;
 
   //获取深度的最小值阈值
   float GetMinDepthMeters() const {
@@ -161,7 +158,7 @@ class DepthProvider {
   /// @param input_is_depth 输入是深度图还是视差图
   /// @param min_depth_m 最小深度
   /// @param max_depth_m 最大深度
-  /// @Note 构造函数放在protected类型中
+  /// @Note 构造函数放在protected类型中,通过PrecomputedDepthProvider进行构造
   explicit DepthProvider(bool input_is_depth, float min_depth_m, float max_depth_m) :
       input_is_depth_(input_is_depth),
       min_depth_m_(min_depth_m),

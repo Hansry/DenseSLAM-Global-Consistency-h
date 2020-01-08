@@ -553,13 +553,17 @@ void PangolinGui::CreatePangolinDisplays(){
                      });
     
     // OpenGL 'view' of data such as the number of actively tracked instances over time.
-    float tick_x = 1.0f;
-    float tick_y = 1.0f;
-    plotter_memory = new pangolin::Plotter(&data_log_memory, 0.0f, 200.0f, -0.1f, 25.0f, tick_x, tick_y);
+    // tick指将横纵坐标分为多少份
+    float tick_x = 30.0f;
+    float tick_y_memory = 15.0f;
+    float tick_y_track =  250.0f;
+    plotter_memory = new pangolin::Plotter(&data_log_memory, 0.0f, 200.0f, 0.0f, 25.0f, tick_x, tick_y_memory);
     plotter_memory->Track("$i");  // This enables automatic scrolling for the live plots.
     
-    data_log_track.SetLabels({ "OrbSLAM tracking Intensity (the number of inliers)"});
-    plotter_track = new pangolin::Plotter(&data_log_track, 0.0f, 200.0f, -0.1f, 500.0f, tick_x, tick_y);
+    data_log_track.SetLabels({ "OrbSLAM tracking Intensity (the number of inliers)",
+                               "PD Threadhold",
+                            });
+    plotter_track = new pangolin::Plotter(&data_log_track, 0.0f, 200.0f, 0.0f, 500.0f, tick_x, tick_y_track);
     plotter_track->Track("$i");
        
     //main_views:指的是融合后的地图
@@ -608,7 +612,7 @@ void PangolinGui::ProcessFrame(){
       return;
     }
       
-    Tic("DynSLAM frame");
+    Tic("DenseSLAM frame");
     // Main workhorse function of the underlying SLAM system.
     dense_slam_->ProcessFrame(this->dense_slam_input_);
     
@@ -631,7 +635,11 @@ void PangolinGui::ProcessFrame(){
     );
     
     int orbslamTrackIntensity = dense_slam_->mTrackIntensity;
-    data_log_track.Log(orbslamTrackIntensity);
+    float PDThreshold = dense_slam_->pdThreshold_;
+    data_log_track.Log(
+      orbslamTrackIntensity,
+      PDThreshold*100 
+    );
 
     int64_t frame_time_ms = Toc(true);
     float fps = 1000.0f / static_cast<float>(frame_time_ms);

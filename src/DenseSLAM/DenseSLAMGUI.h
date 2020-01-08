@@ -12,7 +12,7 @@
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include <pangolin/pangolin.h>
-#include<stdlib.h>
+#include <stdlib.h>
 
 #include "DenseSlam.h"
 #include "PrecomputedDepthProvider.h"

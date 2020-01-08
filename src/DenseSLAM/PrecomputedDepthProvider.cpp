@@ -13,13 +13,13 @@ using namespace std;
 const string kDispNetName = "precomputed-dispnet";
 const string kPrecomputedElas = "precomputed-elas";
 
-void PrecomputedDepthProvider::DisparityMapFromStereo(const cv::Mat&,
+void PrecomputedDepthProvider::DisparityOrDepthMapFromStereo(const cv::Mat&,
                                                       const cv::Mat&,
-                                                      cv::Mat &out_disparity
-) {
+                                                      cv::Mat &out_disparity) {
      ReadPrecomputed(this->input_->GetCurrentFrame(), out_disparity);
 }
 
+/// @brief 若input_is_depth_为true，则直接out是深度图，反之out是视差图
 void PrecomputedDepthProvider::ReadPrecomputed(int frame_idx, cv::Mat &out) const {
   // TODO(andrei): Read correct precomputed depth when doing evaluation of arbitrary frames.
   // For testing, in the beginning we directly read depth (not disparity) maps from the disk.
@@ -47,8 +47,7 @@ void PrecomputedDepthProvider::ReadPrecomputed(int frame_idx, cv::Mat &out) cons
 
   if (out.cols == 0 || out.rows == 0) {
     throw runtime_error(utils::Format(
-        "Could not read precomputed depth map from file [%s]. Please check that the file exists, "
-            "and is a readable, valid, image.",
+        "Could not read precomputed depth map from file [%s]. Please check that the file exists, and is a readable, valid, image.",
         depth_fpath.c_str()));
   }
 
@@ -76,10 +75,31 @@ void PrecomputedDepthProvider::ReadPrecomputed(int frame_idx, cv::Mat &out) cons
   }
 }
 
-float PrecomputedDepthProvider::DepthFromDisparity(const float disparity_px,
-                                                 const StereoCalibration &calibration) {
-  return calibration.focal_length_px * calibration.baseline_meters / disparity_px;
+void PrecomputedDepthProvider::GetDepth(int frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale){
+    if (input_is_depth_) {
+       std::cout << "Will read precomputed depth..." << std::endl;
+       ReadPrecomputed(frame_idx, out_depth);
+       std::cout << "Done reading precomputed depth for specific frame [" << frame_idx << "]." << std::endl;
+       return;
+     }
+
+     ReadPrecomputed(frame_idx, out_disparity_);
+
+     // TODO(andrei): Remove code duplication between this and 'DepthProvider'.
+     if (out_disparity_.type() == CV_32FC1) {
+         DepthFromDisparityMap<float>(out_disparity_, calibration, out_depth, scale);
+     } 
+     else if (out_disparity_.type() == CV_16SC1) {
+        throw std::runtime_error("Unsupported.");
+//      DepthFromDisparityMap<uint16_t>(out_disparity_, calibration, out_depth);
+     } 
+     else {
+          throw std::runtime_error(utils::Format(
+               "Unknown data type for disparity matrix [%s]. Supported are CV_32FC1 and CV_16SC1.", utils::Type2Str(out_disparity_.type()).c_str()
+      ));
+    }
 }
+
 
 const string &PrecomputedDepthProvider::GetName() const {
   if (utils::EndsWith(fname_format_, "pfm")) {

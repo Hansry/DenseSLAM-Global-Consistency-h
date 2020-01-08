@@ -9,6 +9,7 @@ DECLARE_bool(semantic_evaluation);
 DECLARE_int32(evaluation_delay);
 DEFINE_bool(external_odo, true, "Whether to use external VO");
 DEFINE_bool(useOrbSLAMVO, true, "Whether to use OrbSLAM VO");
+DEFINE_bool(useSparseFlowVO, true, "Whether to use SparseFlow VO");
 DEFINE_bool(useOrbSLMKeyFrame, true, "Whether to use Keyframe strategy in ORB_SLAM2");
 
 namespace SparsetoDense {
@@ -26,14 +27,12 @@ void DenseSlam::ProcessFrame(Input *input) {
   utils::Tic("Read input and compute depth");
   if(!input->ReadNextFrame()) {
     throw runtime_error("Could not read input from the data source.");
-  }
-  utils::Toc();
-  
-  utils::Tic("Input preprocessing");
+  }  
   input->GetCvImages(&input_rgb_image_, &input_raw_depth_image_);
   utils::Toc();
 
   /// @brief 对orbslam进行跟踪，同时进行线程的分离
+  utils::Tic("Compute VO");
   future<void> orbslamVO = async(launch::async, [this, &input]{
   cv::Mat orbSLAMInputDepth(input_raw_depth_image_->rows, input_raw_depth_image_->cols, CV_32FC1);
   for(int row =0; row<input_rgb_image_->rows; row++){
@@ -41,9 +40,18 @@ void DenseSlam::ProcessFrame(Input *input) {
       orbSLAMInputDepth.at<float>(row,col) = (float)input_raw_depth_image_->at<ushort>(row,col)/1000.0;
     }
   }
-    orbslam_static_scene_trackRGBD(*input_rgb_image_, 
-				 orbSLAMInputDepth, 
-				 (double)current_frame_no_);
+  
+  if(input->GetSensorType() == Input::RGBD || input->GetSensorType() == Input::MONOCULAR){
+     orbslam_static_scene_trackRGBD(*input_rgb_image_, 
+				    orbSLAMInputDepth, 
+				    (double)current_frame_no_);
+  }
+  else if(input->GetSensorType() == Input::STEREO){
+     cv::Mat3b* right_color_image = new cv::Mat3b(input_rgb_image_->rows, input_rgb_image_->cols);
+     input->GetRightColor(*right_color_image);
+     orbslam_static_scene_trackStereo(*input_rgb_image_, *right_color_image, (double)current_frame_no_);
+     delete right_color_image;
+  }
   });  
   
   /// NOTE 如果当前帧不是关键帧，那么则不进行融合或者更新，直接就return
@@ -51,12 +59,13 @@ void DenseSlam::ProcessFrame(Input *input) {
   lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
   mTrackIntensity = GetOrbSlamTrackerGlobal()->getMatchInlier();
   
-//   float threadhold = PDController(mPreTrackIntensity, mTrackIntensity);
-  
+  float threadhold = PDController(mTrackIntensity, mPreTrackIntensity);
   //在这里实现PD控制器的实现，以及特征点的设置
   mPreTrackIntensity = mTrackIntensity;
+  
   if((int)lastKeyFrameTimeStamp != current_frame_no_){
         current_frame_no_++;
+	utils::Toc();
         return;
   }
   /// NOTE 若当前帧为关键帧，则得到当前帧在世界坐标系下的位姿以及跟踪状态
@@ -102,7 +111,7 @@ void DenseSlam::ProcessFrame(Input *input) {
 	    shouldClearPoseHistory = false;
 	 }
       }
-    else{
+    else if(input->GetSensorType() == Input::STEREO && FLAGS_useSparseFlowVO){
       ///使用双目光流计算出来的里程计
       future<void> ssf_and_vo = async(launch::async, [this, &input, &first_frame] {
       utils::Tic("Sparse Scene Flow");
@@ -162,6 +171,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   }
   /// 使用内部使用的里程计，目前还没有写好
   else{
+     runtime_error("Currently unsupported VO mode!");
      orbslamVO.get();
      orbSLAM2_Pose = orbslam_static_scene_->GetPose();
      orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
@@ -171,37 +181,36 @@ void DenseSlam::ProcessFrame(Input *input) {
 	   pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
     }
   }
+  utils::Toc();
   
+  utils::Tic("Static map fusion");
   if(FLAGS_useOrbSLAMVO){
       /// NOTE orbSLAMTrackingState == 2 意味着orbslam跟踪成功
       if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
-         utils::Tic("Static map fusion");
 	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
-// 	 static_scene_->TrackLocalMap(currentLocalMap);/////delete after
          static_scene_->IntegrateLocalMap(currentLocalMap);
-//          static_scene_->PrepareNextStepLocalMap(currentLocalMap);
-         utils::TocMicro();
-
-//    Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
-//    utils::Tic("Map decay");
-//    static_scene_->Decay();
-//    utils::TocMicro();
+	 //由于PrepareNextStepLocalMap为raycast准备下一帧进行ICP求位姿用的，因此如果使用orbslam作为VO的话，可以不使用这个函数
+//       static_scene_->PrepareNextStepLocalMap(currentLocalMap);
+//       Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
+//       utils::Tic("Map decay");
+//       static_scene_->Decay();
+//       utils::Toc();
        }
     }
    else{
       if (current_frame_no_ % experimental_fusion_every_ == 0) {
-         utils::Tic("Static map fusion");
 	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
          static_scene_->IntegrateLocalMap(currentLocalMap);
-//          static_scene_->PrepareNextStepLocalMap(currentLocalMap);
-         utils::TocMicro();
+//       static_scene_->PrepareNextStepLocalMap(currentLocalMap);
       }
    }
-   
+   utils::Toc();
+   /*
    if(shouldStartNewLocalMap(todoList.back().dataId) && !first_frame ){
        shouldCreateNewLocalMap = true;
        shouldClearPoseHistory = true;
   }
+  */
    current_frame_no_++;
 }
 
@@ -212,10 +221,9 @@ bool DenseSlam::shouldStartNewLocalMap(int CurrentLocalMapIdx) const {
     if(allocated < tmp) {
       tmp = allocated;
     }
-    std::cout << "counted: " << (float)counted << std::endl;
-    std::cout << "tmp: " << (float)tmp << std::endl;
-
-    std::cout << "((float)counted/(float)tmp): " << ((float)counted/(float)tmp) << std::endl;
+//     std::cout << "counted: " << (float)counted << std::endl;
+//     std::cout << "tmp: " << (float)tmp << std::endl;
+//     std::cout << "((float)counted/(float)tmp): " << ((float)counted/(float)tmp) << std::endl;
     return ((float)counted/(float)tmp) < F_originalBlocksThreshold;
 }
 

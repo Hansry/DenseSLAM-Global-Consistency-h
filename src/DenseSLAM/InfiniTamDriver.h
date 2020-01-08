@@ -164,8 +164,6 @@ public:
     const Matrix4f Tcurrmap_w = currLocalMap->estimatedGlobalPose.GetM();
     //Tprevious_c = (Tprevious_currmap) * (T_currmap_w * Tw_c)
     *(this->last_egomotion_)  = ItmToEigen(currLocalMap->trackingState->pose_d->GetInvM()).inverse()*(ItmToEigen(Tcurrmap_w) * new_pose);
-    
-    std::cout << "Tcurrmap_w * EigenToItm(new_pose): " << Tcurrmap_w * EigenToItm(new_pose) << std::endl; 
     currLocalMap->trackingState->pose_d->SetInvM(Tcurrmap_w * EigenToItm(new_pose));
   }
 

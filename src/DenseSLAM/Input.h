@@ -5,6 +5,7 @@
 #include <string>
 #include <highgui.h>
 #include <memory>
+#include <fstream>
 
 #include "DepthProvider.h"
 #include "Utils.h"
@@ -16,8 +17,21 @@ namespace SparsetoDense {
 /// Since DynSLAM currently operates with stereo input, this class also computes depth from stereo.
 /// Currently, this is "computed" by reading the depth maps from disk, but the plan is to compute
 /// depth on the fly in the future.
-class Input {
- public:
+  
+class Input { 
+public:
+  enum eSensor{
+    MONOCULAR = 0,
+    STEREO = 1,
+    RGBD = 2
+  };
+  
+  enum eDatasetType{
+    KITTI = 0,
+    TUM = 1,
+    EUROC = 2
+  };
+ 
   struct Config {
     std::string dataset_name;
     std::string left_gray_folder;
@@ -26,6 +40,7 @@ class Input {
     std::string right_color_folder;
     std::string fname_format;
     std::string calibration_fname;
+    std::string frame_timestamp;
 
     /// \brief Minimum depth to keep when computing depth maps.
     float min_depth_m = -1.0f;
@@ -77,6 +92,7 @@ class Input {
 
     config.velodyne_folder        = "velodyne";
     config.velodyne_fname_format  = "%06d.bin";
+    config.frame_timestamp        = "";
 
     return config;
   };
@@ -86,12 +102,41 @@ class Input {
     config.depth_folder           = "precomputed-depth-dispnet";
     config.depth_fname_format     = "%06d.pfm";
     config.read_depth             = false;
+    
+    return config;
+  }
+  
+  static Config TUMOdometryConfig(){
+    Config config;
+    config.dataset_name        = "TUM-odometry";
+    config.left_gray_folder    = "";
+    config.right_gray_folder   = "";
+    config.left_color_folder   = "rgb";
+    config.right_gray_folder   = "";
+    config.fname_format        = ".png";   
+    config.calibration_fname   = "calib.txt";
+    
+    config.min_depth_m         = 0.0f;
+    config.max_depth_m         = 20.0f;
+    config.depth_folder        = "depth";
+    config.depth_fname_format  = ".png";
+    config.read_depth          = true;
+    
+    config.odometry_oxts       = false;
+    config.odometry_fname      = "groundtruth.txt";
+    
+    config.velodyne_folder     =  "";
+    config.velodyne_fname_format = "";
+    
+    config.frame_timestamp     = "rgb.txt";        
+    
     return config;
   }
 
-
  public:
   Input(const std::string &dataset_folder,
+	const eSensor sensor,
+	const eDatasetType datasetType,
         const Config &config,
         DepthProvider *depth_provider,
         const Eigen::Vector2i &frame_size,
@@ -99,10 +144,12 @@ class Input {
         int frame_offset,
         float input_scale)
       : dataset_folder_(dataset_folder),
+        mSensor(sensor),
+        mDatasetType(datasetType),
         config_(config),
         depth_provider_(depth_provider),
         frame_offset_(frame_offset),
-        frame_idx_(frame_offset),
+        frame_idx_index(frame_offset),
         frame_width_(frame_size(0)),
         frame_height_(frame_size(1)),
         stereo_calibration_(stereo_calibration),
@@ -110,8 +157,32 @@ class Input {
         input_scale_(input_scale),
         depth_buf_small_(static_cast<int>(round(frame_size(1) * input_scale)),
                          static_cast<int>(round(frame_size(0) * input_scale)))
-  {}
+    {
+	if(mDatasetType == Input::TUM){
+	   std::string fpath= dataset_folder + "/" + config.frame_timestamp;
+	   if(utils::FileExists(fpath)){
+	     getImageTimeStamp(fpath);
+	   }
+	   else{
+	     std::runtime_error("the path to obtain frame timestamp doesn't exist!");
+	  }
+	  frame_idx_ = timeStampVector[frame_idx_index];
+	}
+	else{
+	  frame_idx_ = frame_idx_index;
+	}
+    }
 
+  void getImageTimeStamp(std::string fpath) {
+     std::ifstream in(fpath);
+     std::string s;
+     while(getline(in,s)){
+        if(s[0] == '#') continue;
+	std::string timestamp = s.substr(0,s.rfind(' '));
+	timeStampVector.push_back(timestamp);
+     }
+  }
+  
   //判断是否还有剩余的图片
   bool HasMoreImages() const;
 
@@ -170,13 +241,28 @@ class Input {
   int GetFrameOffset() const {
     return frame_offset_;
   }
+  
+  eSensor GetSensorType() const {
+    return mSensor;
+  }
+  
+  void GetRightColor(cv::Mat3b &out) const;
 
  private:
+  //数据类型
+  eSensor mSensor;
+  eDatasetType mDatasetType;
+  
+  std::vector<std::string> timeStampVector; 
+  
   std::string dataset_folder_;
   Config config_;
   DepthProvider *depth_provider_;
   const int frame_offset_;
+  int frame_idx_index;
+  
   int frame_idx_;
+  
   int frame_width_;
   int frame_height_;
 
