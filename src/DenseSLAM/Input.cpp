@@ -6,7 +6,8 @@ namespace SparsetoDense {
 
 using namespace std;
 
-void Input::GetFrameCvImages(int frame_idx, std::shared_ptr<cv::Mat3b> &rgb, std::shared_ptr<cv::Mat1s> &raw_depth) {
+template<typename T>
+void Input::GetFrameCvImages(T frame_idx, std::shared_ptr<cv::Mat3b> &rgb, std::shared_ptr<cv::Mat1s> &raw_depth) {
   
   cv::Mat3b rgb_right_temp(GetRgbSize());
   rgb.reset(new cv::Mat3b(GetRgbSize()));
@@ -22,13 +23,30 @@ void Input::GetFrameCvImages(int frame_idx, std::shared_ptr<cv::Mat3b> &rgb, std
 }
 
 bool Input::HasMoreImages() const {
-  string next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx_);
+  string next_fpath = "";
+  if(mDatasetType == KITTI){
+    next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx_int);
+  }
+  else if(mDatasetType == TUM){
+    next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx_pair.first);
+  }
+  else{
+    runtime_error("Currently Unspported dataset type !");
+  }
   return utils::FileExists(next_fpath);
 }
 
 bool Input::ReadNextFrame() {
-  /// @brief 读取id为frame_idx的color image,并将其保存在left or right_frame_color_buf_中_
-  ReadLeftColor(frame_idx_, left_frame_color_buf_);
+  /// @brief 读取id为frame_idx的color image,并将其保存在left or right_frame_color_buf_中
+  if(mDatasetType == KITTI){
+    ReadLeftColor(frame_idx_int, left_frame_color_buf_);
+  }
+  else if(mDatasetType == TUM){
+    ReadLeftColor(frame_idx_pair.first, left_frame_color_buf_);
+  }
+  else{
+    runtime_error("Currently Unspported dataset type !");
+  }
   const auto &rgb_size = GetRgbSize();
   if (left_frame_color_buf_.rows != rgb_size.height || left_frame_color_buf_.cols != rgb_size.width) {
     cerr << "Unexpected left RGB frame size. Got " << left_frame_color_buf_.size() << ", but the "
@@ -39,7 +57,15 @@ bool Input::ReadNextFrame() {
   }
   
   if(mSensor==Input::STEREO){
-     ReadRightColor(frame_idx_, right_frame_color_buf_);
+    if(mDatasetType == KITTI){
+       ReadRightColor(frame_idx_int, right_frame_color_buf_);;
+    }
+    else if(mDatasetType == TUM){
+       ReadRightColor(frame_idx_pair.first, right_frame_color_buf_);
+    }
+    else{
+       runtime_error("Unspporte frame_idx type !");
+    }
      // Sanity checks to ensure the dimensions from the calibration file and the actual image dimensions correspond.
      if (right_frame_color_buf_.rows != rgb_size.height || right_frame_color_buf_.cols != rgb_size.width) {
         cerr << "Unexpected right RGB frame size. Got " << right_frame_color_buf_.size() << ", but the calibration file specified " << rgb_size << "." << endl;
@@ -60,11 +86,15 @@ bool Input::ReadNextFrame() {
   }
   else{
     utils::Tic("Depth from Disk Image");
-    depth_provider_->GetDepth(frame_idx_, 
-			      stereo_calibration_, 
-			      depth_out, 
-			      input_scale_);
-    
+    if(mDatasetType == KITTI){
+       depth_provider_->GetDepth(frame_idx_int, stereo_calibration_, depth_out, input_scale_);
+    }
+    else if(mDatasetType == TUM){
+       depth_provider_->GetDepth(frame_idx_pair.second, stereo_calibration_, depth_out, input_scale_);
+    }
+    else{
+       runtime_error("Unspporte frame_idx type !");
+    }
   }
   if (input_scale_ != 1.0f) {
     cv::resize(depth_buf_small_,
@@ -84,7 +114,11 @@ bool Input::ReadNextFrame() {
     return false;
   }
 
-  frame_idx_++;
+  frame_idx_index ++;
+  if(mDatasetType == TUM){
+    frame_idx_pair = timeStampVector[frame_idx_index];
+  }
+  frame_idx_int = frame_idx_index; 
   return true;
 }
 
@@ -104,7 +138,8 @@ void Input::GetCvStereoColor(cv::Mat3b **left_rgb, cv::Mat3b **right_rgb) {
 }
 
 /// @brief 读取id为frame_idx的left gray image
-void Input::ReadLeftGray(int frame_idx, cv::Mat1b &out) const {
+template<typename T>
+void Input::ReadLeftGray(T frame_idx, cv::Mat1b &out) const {
   out = cv::imread(GetFrameName(dataset_folder_,
                                 config_.left_gray_folder,
                                 config_.fname_format,
@@ -113,7 +148,8 @@ void Input::ReadLeftGray(int frame_idx, cv::Mat1b &out) const {
 }
 
 /// @brief 读取id为frame_idx的right gray image
-void Input::ReadRightGray(int frame_idx, cv::Mat1b &out) const {
+template<typename T>
+void Input::ReadRightGray(T frame_idx, cv::Mat1b &out) const {
   out = cv::imread(GetFrameName(dataset_folder_,
                                 config_.right_gray_folder,
                                 config_.fname_format,
@@ -123,7 +159,8 @@ void Input::ReadRightGray(int frame_idx, cv::Mat1b &out) const {
 }
 
 /// @brief 读取id为frame_idx的left color image,支持scale,最近邻插值
-void Input::ReadLeftColor(int frame_idx, cv::Mat3b &out) const {
+template<typename T>
+void Input::ReadLeftColor(T frame_idx, cv::Mat3b &out) const {
   cv::Mat3b buf = cv::imread(GetFrameName(dataset_folder_,
                                           config_.left_color_folder,
                                           config_.fname_format,
@@ -132,7 +169,8 @@ void Input::ReadLeftColor(int frame_idx, cv::Mat3b &out) const {
 }
 
 /// @brief 读取id为frame_idx的right color image，支持scale,最近邻插值
-void Input::ReadRightColor(int frame_idx, cv::Mat3b &out) const {
+template<typename T>
+void Input::ReadRightColor(T frame_idx, cv::Mat3b &out) const {
   cv::Mat3b buf = cv::imread(GetFrameName(dataset_folder_,
                                           config_.right_color_folder,
                                           config_.fname_format,
@@ -140,12 +178,24 @@ void Input::ReadRightColor(int frame_idx, cv::Mat3b &out) const {
   cv::resize(buf, out, cv::Size(), 1 / input_scale_, 1 / input_scale_, cv::INTER_NEAREST);
 }
 
+/// To do this more clear
 void Input::GetRightColor(cv::Mat3b &out) const {
-  int frame_idx = GetCurrentFrame();
-  cv::Mat3b buf = cv::imread(GetFrameName(dataset_folder_,
-                                          config_.right_color_folder,
-                                          config_.fname_format,
-                                          frame_idx));
+  cv::Mat3b buf;
+  if(GetDatasetType()==KITTI){
+    buf = cv::imread(GetFrameName(dataset_folder_,
+                                            config_.right_color_folder,
+                                            config_.fname_format,
+                                            frame_idx_int));
+  }
+  else if(GetDatasetType()==TUM){
+    buf = cv::imread(GetFrameName(dataset_folder_,
+                                  config_.right_color_folder,
+                                  config_.fname_format,
+                                  frame_idx_pair.first));
+  }
+  else{
+    runtime_error("Currently unspported type !");
+  }
   cv::resize(buf, out, cv::Size(), 1 / input_scale_, 1 / input_scale_, cv::INTER_NEAREST);
 }
 

@@ -77,6 +77,10 @@ public:
          return this->TrackRGBD(im,depthmap,timestamp);
     }
     
+    cv::Mat orbTrackMonocular(const cv::Mat &im, const double &timestamp){
+         return this->TrackMonocular(im, timestamp);
+    }
+    
     void orbShutdown(){
          this->Shutdown();
     }

@@ -17,17 +17,17 @@ namespace SparsetoDense {
 void DenseSlam::ProcessFrame(Input *input) {
   // Read the images from the first part of the pipeline
   if (! input->HasMoreImages()) {
-    cout << "No more frames left in image source." << endl;
-    return;
+     cout << "No more frames left in image source." << endl;
+     return;
   }
-  
-  bool first_frame = (current_frame_no_ == 0);
-  
-  /// @brief 更新当前buf存储的color image和 depth 
   utils::Tic("Read input and compute depth");
   if(!input->ReadNextFrame()) {
-    throw runtime_error("Could not read input from the data source.");
-  }  
+     throw runtime_error("Could not read input from the data source.");
+  }
+  
+  bool first_frame = (current_keyframe_no_ == 0);
+  /// @brief 更新当前buf存储的color image和 depth 
+  
   input->GetCvImages(&input_rgb_image_, &input_raw_depth_image_);
   utils::Toc();
 
@@ -35,13 +35,17 @@ void DenseSlam::ProcessFrame(Input *input) {
   utils::Tic("Compute VO");
   future<void> orbslamVO = async(launch::async, [this, &input]{
   cv::Mat orbSLAMInputDepth(input_raw_depth_image_->rows, input_raw_depth_image_->cols, CV_32FC1);
+
   for(int row =0; row<input_rgb_image_->rows; row++){
     for(int col =0; col<input_rgb_image_->cols; col++){
-      orbSLAMInputDepth.at<float>(row,col) = (float)input_raw_depth_image_->at<ushort>(row,col)/1000.0;
+      orbSLAMInputDepth.at<float>(row,col) = ((float)input_raw_depth_image_->at<int16_t>(row,col))/1000.0;
     }
   }
   
-  if(input->GetSensorType() == Input::RGBD || input->GetSensorType() == Input::MONOCULAR){
+//   imshow("orbSLAMInputDepth: ", orbSLAMInputDepth);
+//   cv::waitKey(0);
+  
+  if(input->GetSensorType() == Input::RGBD){
      orbslam_static_scene_trackRGBD(*input_rgb_image_, 
 				    orbSLAMInputDepth, 
 				    (double)current_frame_no_);
@@ -52,10 +56,21 @@ void DenseSlam::ProcessFrame(Input *input) {
      orbslam_static_scene_trackStereo(*input_rgb_image_, *right_color_image, (double)current_frame_no_);
      delete right_color_image;
   }
+  else if(input->GetSensorType() == Input::MONOCULAR){
+     orbslam_static_scene_trackMonular(*input_rgb_image_, (double)current_frame_no_);
+  }
   });  
   
   /// NOTE 如果当前帧不是关键帧，那么则不进行融合或者更新，直接就return
   orbslamVO.get();
+  orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
+  //orbSLAMTrackingState == -1意味着系统未准备好，==1意味着没有初始化成功,对于单目来说需要判断是否初始化
+  if(orbSLAMTrackingState==-1 ||  orbSLAMTrackingState == 1){
+    current_frame_no_++;
+    utils::Toc();
+    return;
+  }
+  
   lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
   mTrackIntensity = GetOrbSlamTrackerGlobal()->getMatchInlier();
   
@@ -63,6 +78,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   //在这里实现PD控制器的实现，以及特征点的设置
   mPreTrackIntensity = mTrackIntensity;
   
+  /// 需要是关键帧的时候才进行地图的融合
   if((int)lastKeyFrameTimeStamp != current_frame_no_){
         current_frame_no_++;
 	utils::Toc();
@@ -70,7 +86,6 @@ void DenseSlam::ProcessFrame(Input *input) {
   }
   /// NOTE 若当前帧为关键帧，则得到当前帧在世界坐标系下的位姿以及跟踪状态
   orbSLAM2_Pose = orbslam_static_scene_->GetPose();
-  orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
   
   /// NOTE 如果是第一帧，则创建子地图，设置创建的子地图基于世界坐标系的位姿
   if(first_frame || shouldCreateNewLocalMap){
@@ -90,7 +105,7 @@ void DenseSlam::ProcessFrame(Input *input) {
 // 	   saveLocalMapToHostMemory(swapOutLocalMapID);
 //       });
 //    }
-//    shouldCreateNewLocalMap = false;
+    shouldCreateNewLocalMap = false;
   }
   
   currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
@@ -212,6 +227,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   }
   */
    current_frame_no_++;
+   current_keyframe_no_ ++;
 }
 
 bool DenseSlam::shouldStartNewLocalMap(int CurrentLocalMapIdx) const {

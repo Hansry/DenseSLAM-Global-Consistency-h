@@ -46,6 +46,10 @@ string Format(const string& fmt, ...) {
   return string(formatted.get());
 }
 
+string Format(const string& fmt, string frame_idx){
+  return frame_idx + ".png";
+}
+
 std::string Type2Str(int type) {
   std::string r;
 

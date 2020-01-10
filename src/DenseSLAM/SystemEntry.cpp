@@ -1,18 +1,19 @@
 #include "DenseSLAMGUI.h"
 #include "InfiniTamDriver.h"
+#include <sys/types.h>
+#include <dirent.h>
 
 const std::string kKittiOdometry = "kitti-odometry";
 const std::string kKittiTracking = "kitti-tracking";
 const std::string kKitti         = "kitti";
 const std::string ORBVocPath = "../src/ORB-SLAM2-API-M/Vocabulary/ORBvoc.txt";
-const std::string SettingFile = "../data/mini-seq-06/kitti_09_26.yaml";
 
 //将需要的命令行参数使用gflags的宏:DEFINE_xxxx(变量名，默认值，help-string)定义在文件当中，全局变量，存储在区全局区中
 DEFINE_string(dataset_root, "", "The root folder of the dataset or dataset sequence to use.");
 DEFINE_int32(sensor_type, 0, "The sensor type.");
 DEFINE_int32(dataset_type, 0, "Determine to use which dataset.");
 DEFINE_string(ORBvoc, ORBVocPath, "the path to load the ORBvoc.txt");
-DEFINE_string(strSettingFile, SettingFile, "the path to load the setting file for ORBSLAM");
+DEFINE_string(strSettingFile, "", "the path to load the setting file for ORBSLAM");
 DEFINE_int32(frame_offset, 0, "The frame index from which to start reading the dataset sequence.");
 DEFINE_int32(frame_limit, 0, "How many frames to process in auto mode. 0 = no limit.");
 DEFINE_bool(voxel_decay, true, "Whether to enable map regularization via voxel decay (a.k.a. voxel garbage collection).");
@@ -123,16 +124,37 @@ void ReadKittiOdometryCalibration(const string &fpath,
   velo_to_left_cam(3, 3) = 1.0;
 }
 
+void ReadTUMOdometryCalibration(const string &fpath,
+                                Eigen::Matrix<double,3,4> &left_gray_proj,
+				double downscale_factor){
+	static const string kLeftColor = "RGB:";
+	ifstream in(fpath);
+	if(! in.is_open()){
+	  throw runtime_error(SparsetoDense::utils::Format("Could not open calibration file: [%s]", fpath.c_str()));
+	}
+        left_gray_proj = ReadProjection(kLeftColor, in, downscale_factor);			  
+}
+
 /// \brief Probes a dataset folder to find the frame dimentsions.
 /// \note This is useful for pre-allocating buffers in the rest of the pipeline.
 /// \returns A (width, height), i.e., (cols, rows)-style dimension.
 /// 返回图像的大小
 Eigen::Vector2i GetFrameSize(const string &dataset_root, const Input::Config &config) {
   string lc_folder = dataset_root + "/" + config.left_color_folder;
+  DIR *pDir;
+  struct dirent* ptr;
+  if(!(pDir = opendir(lc_folder.c_str()))){
+    runtime_error("folder doesnt't exist in GetFRameSize image");
+  }
+  std::string fileName = "";
+  while((ptr = readdir(pDir)) != 0){
+    if(strcmp(ptr->d_name, ".") != 0 && strcmp(ptr->d_name, "..") != 0){
+      fileName = ptr->d_name;
+      break;
+    }
+  }
   stringstream lc_fpath_ss;
-  lc_fpath_ss << lc_folder << "/" << utils::Format(config.fname_format, 1);
-
-  // TODO(andrei): Make this a little nicer if it works.
+  lc_fpath_ss << lc_folder << "/" << fileName;
   cv::Mat frame = cv::imread(lc_fpath_ss.str());
   return Eigen::Vector2i(
       frame.cols * 1.0f / FLAGS_scale,
@@ -143,7 +165,7 @@ Eigen::Vector2i GetFrameSize(const string &dataset_root, const Input::Config &co
 /// \brief Constructs a DynSLAM instance to run on a KITTI Odometry dataset sequence, using liviso2
 ///        for visual odometry.
 /// \brief 构建DenseSLAM对象实例以运行KITTI里程计，libviso为视觉里程计(VO)中的开源算法，包括特征点匹配，位姿估计等
-void BuildDenseSlamKittiOdometry(const string &dataset_root,
+void BuildDenseSlamOdometry(const string &dataset_root,
                                DenseSlam **dense_slam_out,
                                Input **input_out,
 			       Input::eSensor sensor_type,
@@ -171,32 +193,49 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
   }
   else if(dataset_type == Input::TUM){
     input_config = Input::TUMOdometryConfig();
+    FLAGS_chase_cam = true;
   }
   else {
     runtime_error("Unspported dataset type!");
   }
 
+  ///这里的参数用于KITTI
   Eigen::Matrix34d left_gray_proj;
   Eigen::Matrix34d right_gray_proj;
   Eigen::Matrix34d left_color_proj;
   Eigen::Matrix34d right_color_proj;
   Eigen::Matrix4d velo_to_left_gray_cam;//雷达到灰度相机0的转换关系
 
-  // ReadKittiOdometryCalibration读取各个相机的内参以及雷达到灰度相机0的转换关系,挺重要的这里
-  ReadKittiOdometryCalibration(dataset_root + "/" + input_config.calibration_fname,
-                               left_gray_proj, right_gray_proj, left_color_proj, right_color_proj,
-                               velo_to_left_gray_cam, downscale_factor);
   // 读取图片的大小，方便为后面分配内存
   Eigen::Vector2i frame_size = GetFrameSize(dataset_root, input_config);
+  if(dataset_type == SparsetoDense::Input::KITTI){
+     // ReadKittiOdometryCalibration读取各个相机的内参以及雷达到灰度相机0的转换关系,挺重要的这里
+     ReadKittiOdometryCalibration(dataset_root + "/" + input_config.calibration_fname,
+                                  left_gray_proj, right_gray_proj, left_color_proj, right_color_proj,
+                                  velo_to_left_gray_cam, downscale_factor);
 
-  cout << "Read calibration from KITTI-style data..." << endl
-       << "Frame size: " << frame_size << endl
-       << "Proj (left, gray): " << endl << left_gray_proj << endl
-       << "Proj (right, gray): " << endl << right_gray_proj << endl
-       << "Proj (left, color): " << endl << left_color_proj << endl
-       << "Proj (right, color): " << endl << right_color_proj << endl
-       << "Velo: " << endl << velo_to_left_gray_cam << endl;
-
+     cout << "Read calibration from KITTI-style data..." << endl
+          << "Frame size: " << frame_size << endl
+          << "Proj (left, gray): " << endl << left_gray_proj << endl
+          << "Proj (right, gray): " << endl << right_gray_proj << endl
+          << "Proj (left, color): " << endl << left_color_proj << endl
+          << "Proj (right, color): " << endl << right_color_proj << endl
+          << "Velo: " << endl << velo_to_left_gray_cam << endl;
+  }
+  else if(dataset_type == SparsetoDense::Input::TUM){
+      ReadTUMOdometryCalibration(dataset_root + "/" + input_config.calibration_fname, left_color_proj, downscale_factor);
+      left_gray_proj = left_color_proj;
+      right_gray_proj = left_color_proj;
+      right_color_proj = left_color_proj;
+      velo_to_left_gray_cam.setOnes();
+      cout << "Read calibration from TUM data..." << endl
+           << "Frame size: " << frame_size << endl
+	   << "Proj: " << endl << left_color_proj << endl;
+  }
+  else{
+      runtime_error("Currently not supported the dataset type !");
+  }
+  
   VoxelDecayParams voxel_decay_params(
       FLAGS_voxel_decay,
       FLAGS_min_decay_age,
@@ -235,6 +274,7 @@ void BuildDenseSlamKittiOdometry(const string &dataset_root,
     input_config.read_depth = true; //直接读取的是深度图
   }
   
+  FLAGS_strSettingFile = dataset_root + "/orbslam_param.yaml";
   //通过预测深度，可以通过从disk读取，也可以实时进行计算
   DepthProvider *depth = new PrecomputedDepthProvider(
       *input_out,
@@ -362,7 +402,7 @@ int main(int argc, char **argv) {
   else{
     dataset_type = SparsetoDense::Input::EUROC;
   }
-  BuildDenseSlamKittiOdometry(dataset_root, &dense_slam, &input, sensor_type, sensor_type_orbslam, dataset_type);
+  BuildDenseSlamOdometry(dataset_root, &dense_slam, &input, sensor_type, sensor_type_orbslam, dataset_type);
   
   SparsetoDense::gui::ParamSLAMGUI paramGUI;
   paramGUI.autoplay = FLAGS_autoplay;

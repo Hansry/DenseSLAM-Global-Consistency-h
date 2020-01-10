@@ -113,13 +113,13 @@ public:
     config.right_gray_folder   = "";
     config.left_color_folder   = "rgb";
     config.right_gray_folder   = "";
-    config.fname_format        = ".png";   
+    config.fname_format        = "%17f.png";   
     config.calibration_fname   = "calib.txt";
     
-    config.min_depth_m         = 0.0f;
-    config.max_depth_m         = 20.0f;
+    config.min_depth_m         = 0.001f;
+    config.max_depth_m         = 30.0f;
     config.depth_folder        = "depth";
-    config.depth_fname_format  = ".png";
+    config.depth_fname_format  = "%17f.png";
     config.read_depth          = true;
     
     config.odometry_oxts       = false;
@@ -128,7 +128,8 @@ public:
     config.velodyne_folder     =  "";
     config.velodyne_fname_format = "";
     
-    config.frame_timestamp     = "rgb.txt";        
+    config.frame_timestamp     = "associate.txt";        
+    
     
     return config;
   }
@@ -165,11 +166,11 @@ public:
 	   }
 	   else{
 	     std::runtime_error("the path to obtain frame timestamp doesn't exist!");
-	  }
-	  frame_idx_ = timeStampVector[frame_idx_index];
+	  }	  
+	  frame_idx_pair = timeStampVector[frame_idx_index];
 	}
 	else{
-	  frame_idx_ = frame_idx_index;
+	  frame_idx_int = frame_idx_index;
 	}
     }
 
@@ -178,8 +179,11 @@ public:
      std::string s;
      while(getline(in,s)){
         if(s[0] == '#') continue;
-	std::string timestamp = s.substr(0,s.rfind(' '));
-	timeStampVector.push_back(timestamp);
+	std::string substring = s.substr(0,s.rfind("rgb")-1);
+	std::string rgb_timestamp = substring.substr(0,substring.rfind(' '));
+	//这里加18是因为depth_timestamp的位数为17位
+	std::string depth_timestamp = substring.substr(substring.rfind(' ')+1, substring.rfind(' ')+18);
+	timeStampVector.push_back(std::make_pair(rgb_timestamp, depth_timestamp));
      }
   }
   
@@ -227,12 +231,17 @@ public:
 
   /// \brief Returns the current frame index from the dataset.
   /// \note May not be the same as the current DynSLAM frame number if an offset was used.
-  int GetCurrentFrame() const {
-    return frame_idx_;
+  int GetCurrentFrame_int() const {
+      return frame_idx_int;
   }
-
+  
+  std::pair<std::string, std::string> GetCurrentFrame_str() const {
+      return frame_idx_pair;
+  }
+  
   /// \brief Sets the out parameters to the RGB and depth images from the specified frame.
-  void GetFrameCvImages(int frame_idx, std::shared_ptr<cv::Mat3b> &rgb, std::shared_ptr<cv::Mat1s> &raw_depth);
+  template<typename T>
+  void GetFrameCvImages(T frame_idx, std::shared_ptr<cv::Mat3b> &rgb, std::shared_ptr<cv::Mat1s> &raw_depth);
 
   const Config& GetConfig() const {
     return config_;
@@ -247,13 +256,17 @@ public:
   }
   
   void GetRightColor(cv::Mat3b &out) const;
+  
+  eDatasetType GetDatasetType() const{
+    return mDatasetType;
+  }
 
  private:
   //数据类型
   eSensor mSensor;
   eDatasetType mDatasetType;
   
-  std::vector<std::string> timeStampVector; 
+  std::vector<std::pair<std::string,std::string>> timeStampVector; 
   
   std::string dataset_folder_;
   Config config_;
@@ -261,7 +274,8 @@ public:
   const int frame_offset_;
   int frame_idx_index;
   
-  int frame_idx_;
+  int frame_idx_int = 0;
+  std::pair<std::string, std::string> frame_idx_pair = std::make_pair("","");
   
   int frame_width_;
   int frame_height_;
@@ -283,14 +297,22 @@ public:
 //  cv::Mat1s raw_depth_small(static_cast<int>(round(GetDepthSize().height * input_scale_)),
 //  static_cast<int>(round(GetDepthSize().width * input_scale_)));
 
-  static std::string GetFrameName(const std::string &root, const std::string &folder, const std::string &fname_format, int frame_idx) {
+  template<typename T>
+  static std::string GetFrameName(const std::string &root, const std::string &folder, const std::string &fname_format, T frame_idx) {
     return root + "/" + folder + "/" + utils::Format(fname_format, frame_idx);
   }
-
-  void ReadLeftGray(int frame_idx, cv::Mat1b &out) const;
-  void ReadRightGray(int frame_idx, cv::Mat1b &out) const;
-  void ReadLeftColor(int frame_idx, cv::Mat3b &out) const;
-  void ReadRightColor(int frame_idx, cv::Mat3b &out) const;
+ 
+  template<typename T>
+  void ReadLeftGray(T frame_idx, cv::Mat1b &out) const;
+  
+  template<typename T>
+  void ReadRightGray(T frame_idx, cv::Mat1b &out) const;
+  
+  template<typename T>
+  void ReadLeftColor(T frame_idx, cv::Mat3b &out) const;
+  
+  template<typename T>
+  void ReadRightColor(T frame_idx, cv::Mat3b &out) const;
 };
 
 } // namespace SparsetoDense

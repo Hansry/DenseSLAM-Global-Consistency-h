@@ -24,15 +24,28 @@ void PangolinGui::DrawPose(long int current_time_ms){
     float frustum_root_cube_scale = 0.00f;
 
     /// NOTE 对所有位姿进行绘制
-    const float kMaxFrustumScale = 0.66;
-    Eigen::Vector3f color_white(1.0f, 1.0f, 1.0f);
-    for (int i = 0; i < static_cast<int>(phist.size()) - 1; ++i) {
-      float frustum_scale = max(0.15f, kMaxFrustumScale - 0.05f * (phist.size() - 1 - i));
-      DrawPoseFrustum(phist[i], color_white, frustum_scale, frustum_root_cube_scale);
+    float kMaxFrustumScale = 0.66;
+    Eigen::Vector3f color_blue(0.0f, 0.0f, 255.0f);
+    
+    //对于大范围的KITTI数据集，我们将所有的位姿画出来
+    if(dense_slam_input_->GetDatasetType() == Input::KITTI){
+        for (int i = 0; i < static_cast<int>(phist.size()) - 1; ++i) {
+//             float frustum_scale = max(0.15f, kMaxFrustumScale - 0.05f * (phist.size() - 1 - i));
+            DrawPoseFrustum(phist[i], color_blue, kMaxFrustumScale, frustum_root_cube_scale);
+        }
+    }
+    else if(dense_slam_input_->GetDatasetType() == Input::TUM){
+      kMaxFrustumScale = 0.3;
+      for (int i = static_cast<int>(phist.size())-5; i < static_cast<int>(phist.size()) - 1; ++i) {
+            DrawPoseFrustum(phist[i], color_blue, kMaxFrustumScale, frustum_root_cube_scale);
+      }
+    }
+    else{
+      runtime_error("Currently not support this dataset type!");
     }
 
     /// NOTE 对最新的位姿颜色进行加深
-    if (! phist.empty()) {
+    if (! phist.empty() ) {
       // Highlight the most recent pose.
       Eigen::Vector3f glowing_green(
           0.5f, 0.5f + static_cast<float>(sin(current_time_ms / 250.0) * 0.5 + 0.5) * 0.5f, 0.5f);
@@ -92,12 +105,25 @@ void PangolinGui::Run(){
       {
         Eigen::Matrix4f cam_mv = dense_slam_->GetPose().inverse();
         pangolin::OpenGlMatrix pm(cam_mv);
+	if(dense_slam_input_->GetDatasetType() == Input::KITTI){
         pm =
             // Good for odo 05
              pangolin::OpenGlMatrix::RotateY(M_PI * 0.5 * 0.05f) *
              pangolin::OpenGlMatrix::RotateX(M_PI * 0.5 * 0.03f) *
              pangolin::OpenGlMatrix::Translate(-0.5, 1.0, 15.0) *
              pm;
+	}
+	else if(dense_slam_input_->GetDatasetType() == Input::TUM){
+	 pm =
+            // Good for odo 05
+            pangolin::OpenGlMatrix::RotateY(M_PI * 0.5 * 0.05f) *
+            pangolin::OpenGlMatrix::RotateX(M_PI * 0.5 * 0.03f) *
+            pangolin::OpenGlMatrix::Translate(-0.5, 0.0, 2.0) *
+            pm;
+	}
+	else{
+	  runtime_error("Currently not support this dataset type!");
+	}
          pane_cam_->SetModelViewMatrix(pm);
 	 orb_pane_cam_->SetModelViewMatrix(pm);
       }
@@ -144,11 +170,16 @@ void PangolinGui::Run(){
       orbslam_view_->Activate(*orb_pane_cam_);
       if(dense_slam_->GetCurrentFrameNo()>=1){
 	glClearColor(0.0f,0.0f,0.0f,0.0f);
+	bool showGraph = true;
+	if(dense_slam_input_->GetDatasetType() == Input::TUM){
+	    OrbSlamMapDrawer_->SetViewKeyframe(5);
+	    showGraph = false;
+	}
 	if(sparseMap_show_graph_->Get()){
 	  OrbSlamMapDrawer_->DrawCurrentCamera(OrbSlamTwc_);
 	}
 	if(sparseMap_show_keyFrame_->Get()){
-	  OrbSlamMapDrawer_->DrawKeyFrames(true,true);
+	  OrbSlamMapDrawer_->DrawKeyFrames(true,showGraph);
 	}
 	if(sparseMap_show_points_->Get()){
 	  OrbSlamMapDrawer_->DrawMapPoints();
@@ -475,6 +506,7 @@ void PangolinGui::CreatePangolinDisplays(){
         pangolin::ModelViewLookAtRDF(3.0,  -2.5, 10,
                                      3.0,  -2.5, 50,
                                      0, 1, 0));
+
     //pane_cam_->Follow()
     
     
@@ -569,14 +601,29 @@ void PangolinGui::CreatePangolinDisplays(){
     //main_views:指的是融合后的地图
     //detail_views:指的是static_rgb、 static_depth、 segment_view_、object_view
     //SetBounds(bottom, top, left, right)
-    main_view_->SetBounds(pangolin::Attach::Pix(height_ *2.0), pangolin::Attach::Pix(height_ * 3.0), pangolin::Attach::Pix(kUiWidth*1.2), pangolin::Attach::Pix(kUiWidth*1.2+width_));
-    orbslam_view_->SetBounds(pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(height_ * 2.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
-    detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
-    detail_views_->SetLayout(pangolin::LayoutEqual)
-      .AddDisplay(rgb_view_)
-      .AddDisplay(depth_view_)
-      .AddDisplay(*plotter_memory)
-      .AddDisplay(*plotter_track);
+    if(dense_slam_input_->GetDatasetType() == Input::KITTI){
+       main_view_->SetBounds(pangolin::Attach::Pix(height_ *2.0), pangolin::Attach::Pix(height_ * 3.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth*1.2+width_));
+       orbslam_view_->SetBounds(pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(height_ * 2.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
+       detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
+       detail_views_->SetLayout(pangolin::LayoutEqual)
+         .AddDisplay(rgb_view_)
+         .AddDisplay(depth_view_)
+         .AddDisplay(*plotter_memory)
+         .AddDisplay(*plotter_track);
+    }
+    else if(dense_slam_input_->GetDatasetType() == Input::TUM){
+      main_view_->SetBounds(pangolin::Attach::Pix(height_ *1.0), pangolin::Attach::Pix(height_ * 2.0), pangolin::Attach::Pix(kUiWidth+width_), pangolin::Attach::Pix(kUiWidth+2*width_));
+      orbslam_view_->SetBounds(pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(height_ * 2.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
+      detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+2*width_));
+      detail_views_->SetLayout(pangolin::LayoutEqual)
+         .AddDisplay(rgb_view_)
+         .AddDisplay(depth_view_)
+         .AddDisplay(*plotter_memory)
+         .AddDisplay(*plotter_track);
+    }
+    else{
+      runtime_error("Currently not support dataset type !");
+    }
     
     /*
     detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_*(1.0/3.0)));
@@ -601,11 +648,10 @@ void PangolinGui::CreatePangolinDisplays(){
 
 void PangolinGui::ProcessFrame(){
     cout << endl << "[Starting frame " << dense_slam_->GetCurrentFrameNo() + 1 << "]" << endl;
-    
     if (! dense_slam_input_->HasMoreImages()){
+      cout << "No more images, Bye!" << endl;
       getchar();
     }
-    
     if (! dense_slam_input_->HasMoreImages() && paramGUI.close_on_complete) {
       cerr << "No more images, Bye!" << endl;
       pangolin::QuitAll();

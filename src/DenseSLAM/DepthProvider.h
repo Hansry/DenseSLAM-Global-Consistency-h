@@ -75,6 +75,7 @@ class DepthProvider {
                                       cv::Mat &out_disparity) = 0; //将在PrecomputedDepthProvider进行实现
                                       
   virtual void GetDepth(int frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale) = 0;
+  virtual void GetDepth(std::string frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale) = 0;
 
   /// \brief 将视差图转为深度图，单位为m，d=baseline*fx/disparity
   float DepthFromDisparity(const float disparity_px, const StereoCalibration &calibration) {

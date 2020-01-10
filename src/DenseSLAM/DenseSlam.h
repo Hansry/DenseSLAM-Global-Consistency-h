@@ -202,6 +202,10 @@ public:
     orbslam_static_scene_->orbTrackStereo(imLeft, imRight, timestamp);
   }
   
+  void orbslam_static_scene_trackMonular(const cv::Mat &im,  int timestamp){
+    orbslam_static_scene_->orbTrackMonocular(im, timestamp);
+  }
+  
   ORB_SLAM2::MapDrawer* GetOrbSlamMapDrawerGlobal() const{
      return orbslam_static_scene_->GetOrbSlamMapDrawer();
   }
@@ -280,7 +284,8 @@ private:
   cv::Mat3b *input_rgb_image_;
   cv::Mat1s *input_raw_depth_image_;
   
-  int current_frame_no_;
+  int current_frame_no_ = 0;
+  int current_keyframe_no_ = 0;
   int input_width_;
   int input_height_;
   
