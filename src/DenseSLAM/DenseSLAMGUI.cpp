@@ -681,10 +681,10 @@ void PangolinGui::ProcessFrame(){
     );
     
     int orbslamTrackIntensity = dense_slam_->mTrackIntensity;
-    float PDThreshold = dense_slam_->pdThreshold_;
+    float PDThreshold = dense_slam_->GetPDThreadhold();
     data_log_track.Log(
       orbslamTrackIntensity,
-      PDThreshold*100 
+      PDThreshold
     );
 
     int64_t frame_time_ms = Toc(true);

@@ -139,7 +139,7 @@ public:
   
   //对对应的子地图进行跟踪后得到的俩帧之间的相对变换
   void TrackLocalMap(ITMLocalMap* currLocalMap){
-    // 上一时刻当前帧坐标系到主子图坐标系的位姿变换，T_{w,p}
+    // 上一时刻主子图坐标系到当前帧坐标系的位姿变换，T_{w,p}
     Matrix4f old_pose = currLocalMap->trackingState->pose_d->GetInvM();
     Matrix4f old_pose_inv;
     //old_pose_inv: T_{o,w}

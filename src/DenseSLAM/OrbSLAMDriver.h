@@ -36,7 +36,6 @@ public:
     
     ///@brief 返回世界坐标系到当前帧的变换Tcw
     cv::Mat GetPose() const{
-      
       cv::Mat OrbSLAMWorldToCurrFramePose = this->GetWorldToCurrFramePose();
       return OrbSLAMWorldToCurrFramePose;
     }

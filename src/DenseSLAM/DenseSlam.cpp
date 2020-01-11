@@ -11,6 +11,8 @@ DEFINE_bool(external_odo, true, "Whether to use external VO");
 DEFINE_bool(useOrbSLAMVO, true, "Whether to use OrbSLAM VO");
 DEFINE_bool(useSparseFlowVO, true, "Whether to use SparseFlow VO");
 DEFINE_bool(useOrbSLMKeyFrame, true, "Whether to use Keyframe strategy in ORB_SLAM2");
+DEFINE_bool(useFusion, true, "Whether to use Fusion Strategy");
+
 
 namespace SparsetoDense {
 
@@ -25,7 +27,7 @@ void DenseSlam::ProcessFrame(Input *input) {
      throw runtime_error("Could not read input from the data source.");
   }
   
-  bool first_frame = (current_keyframe_no_ == 0);
+  bool first_frame = (current_keyframe_no_ == 1);
   /// @brief 更新当前buf存储的color image和 depth 
   
   input->GetCvImages(&input_rgb_image_, &input_raw_depth_image_);
@@ -74,9 +76,44 @@ void DenseSlam::ProcessFrame(Input *input) {
   lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
   mTrackIntensity = GetOrbSlamTrackerGlobal()->getMatchInlier();
   
-  float threadhold = PDController(mTrackIntensity, mPreTrackIntensity);
+  PDThreshold_ = PDController(mTrackIntensity, mPreTrackIntensity);
   //在这里实现PD控制器的实现，以及特征点的设置
   mPreTrackIntensity = mTrackIntensity;
+  
+  ///当threadhold大于mTrackIntensity的时候，就说明此时需要进行位姿的融合了
+  if(!first_frame && PDThreshold_ > mTrackIntensity && FLAGS_useFusion){
+      utils::Tic("Fusion Pose of VO");
+      currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
+      //主要为跟踪做准备
+      static_scene_->PrepareNextStepLocalMap(currentLocalMap);
+      //更新当前的RGB及深度图
+      static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
+      //做跟踪
+      static_scene_->TrackLocalMap(currentLocalMap);
+      //由raycast得到的深度图与当前深度图做ICP跟踪得到的位姿Tw->c
+      ITMLib::Objects::ITMPose tempDensePose;
+      tempDensePose.SetInvM(drivers::EigenToItm(static_scene_->GetLocalMapPose(currentLocalMap)));
+      //由orbSLAM2计算出来的位姿Tw->c
+      orbSLAM2_Pose = orbslam_static_scene_->GetPose();
+      ITMLib::Objects::ITMPose tempSlamPose;
+      tempSlamPose.SetInvM(drivers::EigenToItm(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)));
+      ITMLib::Objects::ITMPose tempfusionPose;
+      int diff = PDThreshold_ - mTrackIntensity;
+      float ratio = (float)diff/(float)PDThreshold_;
+      /// Pose的存储顺序应该为：
+      /// tx,ty,tz,rx,ry,rz
+      float pose[6]= {0.0};
+      for(int i=0; i<6 ; i++){
+	  pose[i] = ratio * tempDensePose.GetParams()[i] + (1-ratio) * tempSlamPose.GetParams()[i];
+      }
+      tempfusionPose.SetFrom(pose);
+      tempfusionPose.Coerce();
+      //其中tempfusionPose.GetM()为Tc->w
+      cout << "SetCurrFrameToWorldPose: " << tempSlamPose.GetInvM() << endl;
+      cout << "Fusion Pose: "<< tempfusionPose.GetInvM() << endl;
+      orbslam_static_scene_->SetCurrFrameToWorldPose(ORB_SLAM2::drivers::EigenToMat(drivers::ItmToEigen(tempfusionPose.GetM())));
+      utils::Toc();
+  }
   
   /// 需要是关键帧的时候才进行地图的融合
   if((int)lastKeyFrameTimeStamp != current_frame_no_){
@@ -84,13 +121,16 @@ void DenseSlam::ProcessFrame(Input *input) {
 	utils::Toc();
         return;
   }
+  
   /// NOTE 若当前帧为关键帧，则得到当前帧在世界坐标系下的位姿以及跟踪状态
   orbSLAM2_Pose = orbslam_static_scene_->GetPose();
+  cout << "orbSLAM2_Pose: " << orbSLAM2_Pose << endl;
   
-  /// NOTE 如果是第一帧，则创建子地图，设置创建的子地图基于世界坐标系的位姿
+  /// NOTE 如果是第一帧，则创建子地图，设置创建的子地图基于世界坐标系的位姿，这部分代码主要用于多子图的构建，目前暂时不是很重要
   if(first_frame || shouldCreateNewLocalMap){
     int currentLocalMapIdx = static_scene_->GetMapManager()->createNewLocalMap();
     ITMLib::Objects::ITMPose tempPose;
+    //InvM指世界坐标系到相机的变换
     tempPose.SetInvM(drivers::EigenToItm(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)));
     static_scene_->GetMapManager()->setEstimatedGlobalPose(currentLocalMapIdx, tempPose);
     todoList.push_back(TodoListEntry(currentLocalMapIdx,
@@ -108,7 +148,10 @@ void DenseSlam::ProcessFrame(Input *input) {
     shouldCreateNewLocalMap = false;
   }
   
-  currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
+  //这个判断条件主要是避免重复调用多的currentLocalMap
+  if(currentLocalMap == NULL){
+      currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
+  }
   todoList.back().endKeyframeTimeStamp = lastKeyFrameTimeStamp;
   
   /// @brief 利用左右图像计算稀疏场景光流
@@ -199,24 +242,26 @@ void DenseSlam::ProcessFrame(Input *input) {
   utils::Toc();
   
   utils::Tic("Static map fusion");
-  if(FLAGS_useOrbSLAMVO){
-      /// NOTE orbSLAMTrackingState == 2 意味着orbslam跟踪成功
-      if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
-	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
-         static_scene_->IntegrateLocalMap(currentLocalMap);
-	 //由于PrepareNextStepLocalMap为raycast准备下一帧进行ICP求位姿用的，因此如果使用orbslam作为VO的话，可以不使用这个函数
-//       static_scene_->PrepareNextStepLocalMap(currentLocalMap);
-//       Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
-//       utils::Tic("Map decay");
-//       static_scene_->Decay();
-//       utils::Toc();
+ /// NOTE orbSLAMTrackingState == 2 意味着orbslam跟踪成功
+  if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
+       cout << "experimental_fusion_every_: " << endl;
+       if(first_frame || PDThreshold_ < mTrackIntensity || !FLAGS_useFusion){
+          static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
        }
-    }
+       static_scene_->IntegrateLocalMap(currentLocalMap);
+       //由于PrepareNextStepLocalMap为raycast准备下一帧进行ICP求位姿用的，因此如果使用orbslam作为VO的话，可以不使用这个函数
+//     static_scene_->PrepareNextStepLocalMap(currentLocalMap);
+//     Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
+//     utils::Tic("Map decay");
+//     static_scene_->Decay();
+//     utils::Toc();
+   }
    else{
       if (current_frame_no_ % experimental_fusion_every_ == 0) {
-	 static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
+	 if(first_frame || PDThreshold_ < mTrackIntensity || !FLAGS_useFusion){
+            static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
+         }
          static_scene_->IntegrateLocalMap(currentLocalMap);
-//       static_scene_->PrepareNextStepLocalMap(currentLocalMap);
       }
    }
    utils::Toc();

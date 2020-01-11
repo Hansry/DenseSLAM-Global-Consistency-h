@@ -71,7 +71,6 @@ class DenseSlam {
 public:
   // PD控制器参数
   int mTrackIntensity = 0;
-  float pdThreshold_ = 0.0;
 
   /// \brief Reads in and processes the next frame from the data source.
   /// This is where most of the interesting stuff happens.
@@ -261,8 +260,11 @@ public:
     if (output < 0){
       output = 0.0;
     }
-    pdThreshold_ = output;
     return output;
+  }
+  
+  float GetPDThreadhold() const{
+    return PDThreshold_;
   }
   
   bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
@@ -284,8 +286,8 @@ private:
   cv::Mat3b *input_rgb_image_;
   cv::Mat1s *input_raw_depth_image_;
   
-  int current_frame_no_ = 0;
-  int current_keyframe_no_ = 0;
+  int current_frame_no_ = 1;
+  int current_keyframe_no_ = 1;
   int input_width_;
   int input_height_;
   
@@ -293,10 +295,16 @@ private:
   int mFeatures_;
   int mGoalFeatures_;
   int mPreTrackIntensity = 0;
-  float mkp = 0.001;
-  float mkd = 0.0001;
+  float mkp = 0.8;
+  float mkd = 0.08;
   ///由于每一帧的时间（包括深度图计算、VO计算、地图融合）接近100ms左右，故delta_t设为0.1ms
   float mDeltaTime_ = 0.1;
+  float PDThreshold_ = 0.0;
+  
+//   float mkp = 0.25;
+//   float mkd = 0.05;
+//   ///由于每一帧的时间（包括深度图计算、VO计算、地图融合）接近100ms左右，故delta_t设为0.1ms
+//   float mDeltaTime_ = 0.15;
   
   // NOTE orbslam的参数
   cv::Mat orbSLAM2_Pose; 
