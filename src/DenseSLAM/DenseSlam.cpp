@@ -22,18 +22,19 @@ void DenseSlam::ProcessFrame(Input *input) {
      cout << "No more frames left in image source." << endl;
      return;
   }
+  
+  
   utils::Tic("Read input and compute depth");
   if(!input->ReadNextFrame()) {
      throw runtime_error("Could not read input from the data source.");
   }
-  
   bool first_frame = (current_keyframe_no_ == 1);
   /// @brief 更新当前buf存储的color image和 depth 
-  
   input->GetCvImages(&input_rgb_image_, &input_raw_depth_image_);
   utils::Toc();
 
-  /// @brief 对orbslam进行跟踪，同时进行线程的分离
+  
+  /// @brief 对orbslam进行跟踪，同时进行线程的分离(其实感觉没啥用哈哈哈)
   utils::Tic("Compute VO");
   future<void> orbslamVO = async(launch::async, [this, &input]{
   cv::Mat orbSLAMInputDepth(input_raw_depth_image_->rows, input_raw_depth_image_->cols, CV_32FC1);
@@ -76,8 +77,8 @@ void DenseSlam::ProcessFrame(Input *input) {
   lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
   mTrackIntensity = GetOrbSlamTrackerGlobal()->getMatchInlier();
   
-  PDThreshold_ = PDController(mTrackIntensity, mPreTrackIntensity);
   //在这里实现PD控制器的实现，以及特征点的设置
+  PDThreshold_ = PDController(mTrackIntensity, mPreTrackIntensity);
   mPreTrackIntensity = mTrackIntensity;
   
   ///当threadhold大于mTrackIntensity的时候，就说明此时需要进行位姿的融合了
@@ -109,8 +110,8 @@ void DenseSlam::ProcessFrame(Input *input) {
       tempfusionPose.SetFrom(pose);
       tempfusionPose.Coerce();
       //其中tempfusionPose.GetM()为Tc->w
-      cout << "SetCurrFrameToWorldPose: " << tempSlamPose.GetInvM() << endl;
-      cout << "Fusion Pose: "<< tempfusionPose.GetInvM() << endl;
+//       cout << "SetCurrFrameToWorldPose: " << tempSlamPose.GetInvM() << endl;
+//       cout << "Fusion Pose: "<< tempfusionPose.GetInvM() << endl;
       orbslam_static_scene_->SetCurrFrameToWorldPose(ORB_SLAM2::drivers::EigenToMat(drivers::ItmToEigen(tempfusionPose.GetM())));
       utils::Toc();
   }
@@ -124,7 +125,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   
   /// NOTE 若当前帧为关键帧，则得到当前帧在世界坐标系下的位姿以及跟踪状态
   orbSLAM2_Pose = orbslam_static_scene_->GetPose();
-  cout << "orbSLAM2_Pose: " << orbSLAM2_Pose << endl;
+//   cout << "orbSLAM2_Pose: " << orbSLAM2_Pose << endl;
   
   /// NOTE 如果是第一帧，则创建子地图，设置创建的子地图基于世界坐标系的位姿，这部分代码主要用于多子图的构建，目前暂时不是很重要
   if(first_frame || shouldCreateNewLocalMap){
@@ -244,7 +245,6 @@ void DenseSlam::ProcessFrame(Input *input) {
   utils::Tic("Static map fusion");
  /// NOTE orbSLAMTrackingState == 2 意味着orbslam跟踪成功
   if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
-       cout << "experimental_fusion_every_: " << endl;
        if(first_frame || PDThreshold_ < mTrackIntensity || !FLAGS_useFusion){
           static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
        }
@@ -252,9 +252,9 @@ void DenseSlam::ProcessFrame(Input *input) {
        //由于PrepareNextStepLocalMap为raycast准备下一帧进行ICP求位姿用的，因此如果使用orbslam作为VO的话，可以不使用这个函数
 //     static_scene_->PrepareNextStepLocalMap(currentLocalMap);
 //     Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
-//     utils::Tic("Map decay");
-//     static_scene_->Decay();
-//     utils::Toc();
+       utils::Tic("Map decay");
+       Decay();
+       utils::Toc();
    }
    else{
       if (current_frame_no_ % experimental_fusion_every_ == 0) {

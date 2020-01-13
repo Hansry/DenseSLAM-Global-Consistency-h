@@ -157,14 +157,26 @@ public:
     return pose_history_;
   }
 
-//   size_t GetStaticMapSavedDecayMemoryBytes() const {
-//     return static_scene_->GetSavedDecayMemoryBytes();
-//   }
-// 
-//   const VoxelDecayParams& GetStaticMapDecayParams() const {
-//     return static_scene_->GetVoxelDecayParams();
-//   }
-// 
+  void Decay(){
+     if(currentLocalMap != NULL){
+       static_scene_->Decay(currentLocalMap);
+    }
+  }
+  
+  void DecayCatchup(){
+    if(currentLocalMap != NULL){
+      static_scene_->DecayCatchup(currentLocalMap);
+    }
+  }
+  
+  size_t GetStaticMapSavedDecayMemoryBytes() const {
+    return static_scene_->GetSavedDecayMemoryBytes();
+  }
+
+  const VoxelDecayParams& GetStaticMapDecayParams() const {
+    return static_scene_->GetVoxelDecayParams();
+  }
+
 //   void WaitForJobs() {
 //     // TODO(andrei): fix this; it does not actually work and never blocks...
 //     static_scene_->WaitForMeshDump();
@@ -321,7 +333,7 @@ private:
   bool shouldClearPoseHistory = false;
   
   ITMLib::Engine::ITMLocalMap* currentLocalMap = NULL;
-
+ 
  // std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f>> pose_history_;
   std::vector<Eigen::Matrix4f> pose_history_;
   /// \brief Matrix for projecting 3D homogeneous coordinates in the left gray camera's coordinate
@@ -331,9 +343,6 @@ private:
   const Eigen::Matrix34f projection_left_rgb_;
   const Eigen::Matrix34f projection_right_rgb_;
   const float stereo_baseline_m_;
-
-  /// \brief Stores the result of the most recent segmentation.
-//   std::shared_ptr<instreclib::segmentation::InstanceSegmentationResult> latest_seg_result_;
 
   /// \brief Perform dense depth computation and dense fusion every K frames.
   /// A value of '1' is the default, and means regular operation fusing every frame.

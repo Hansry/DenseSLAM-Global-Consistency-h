@@ -251,35 +251,36 @@ public:
      return this->mapManager->numLocalMaps();
   }
   
-
-  /// \brief Regularizes the map by pruning low-weight voxels which are old enough.
-  /// Very useful for, e.g., reducing artifacts caused by noisy depth maps.
-  /// \note This implementation is only supported on the GPU, and for voxel hashing.
-  /*
-  void Decay() {
+  /// @brief 通过剔除低权重的voxels（较老的voxels）对地图进行正则化(Regularizes),可以减少由于噪声深度图引起的鬼影(artifacts),
+  ///        目前只支持GPU和Voxel hashing存储类型
+  void Decay(const ITMLocalMap* currentLocalMap) {
     if (voxel_decay_params_.enabled) {
-      denseMapper->Decay(scene, renderState_live, voxel_decay_params_.max_decay_weight,
-                         voxel_decay_params_.min_decay_age, false);
+      denseMapper->Decay(currentLocalMap->scene, 
+                         currentLocalMap->renderState, 
+                         voxel_decay_params_.max_decay_weight,
+                         voxel_decay_params_.min_decay_age, 
+                         false);
     }
   }
 
   /// \brief Goes through all remaining visible lists until present time, triggering garbage
   /// collection for all of them. Should not be used mid-sequence.
-  void DecayCatchup() {
+  /// 遍历所有包括当前时间的可视列表，对这些可视列表进行Decay
+  void DecayCatchup(const ITMLocalMap* currentLocalMap) {
     if (voxel_decay_params_.enabled) {
-      cout << "Will perform voxel decay (GC) for all remaining frames up to the present. "
-           << "Continuing to reconstruct past this point may lead to artifacts!" << endl;
+      std::cout << "Will perform voxel decay (GC) for all remaining frames up to the present. "
+           << "Continuing to reconstruct past this point may lead to artifacts!" << std::endl;
 
       for (int i = 0; i < voxel_decay_params_.min_decay_age; ++i) {
-        denseMapper->Decay(scene,
-                           renderState_live,
+        denseMapper->Decay(currentLocalMap->scene,
+                           currentLocalMap->renderState,
                            voxel_decay_params_.max_decay_weight,
                            // Set the actual min age to 0 to clean everything up real good.
                            0,
                            false);
       }
 
-      cout << "Decay (GC) catchup complete." << endl;
+      std::cout << "Decay (GC) catchup complete." << std::endl;
     }
   }
 
@@ -287,6 +288,7 @@ public:
   /// Typically used to clean up finished reconstructions. Can be much slower than `Decay`, even by
   /// a few orders of magnitude if used on the full static map.
   /// 通常用于清理已完成的地图重建，可以比‘Decay’慢得多，即使在高出几个数量级的完整静态地图上
+  /*
   void Reap(int max_decay_weight) {
     if (voxel_decay_params_.enabled) {
       denseMapper->Decay(scene, renderState_live, max_decay_weight, 0, true);
@@ -321,14 +323,12 @@ public:
   const ITMVisualisationEngine<ITMVoxel, ITMVoxelIndex> *GetVisualizationEngine() const {
      return this->visualisationEngine; 
   }
- 
-  /*
+
   size_t GetSavedDecayMemoryBytes() const {
     size_t block_size_bytes = GetVoxelSizeBytes() * SDF_BLOCK_SIZE3;
     size_t decayed_block_count = denseMapper->GetDecayedBlockCount();
     return decayed_block_count * block_size_bytes;
   }
-  */
   
   
 //   void WaitForMeshDump() {
@@ -336,8 +336,7 @@ public:
 //       write_result.wait();
 //     }
 //   }
-  
-  /*
+
   VoxelDecayParams& GetVoxelDecayParams() {
     return voxel_decay_params_;
   }
@@ -349,7 +348,6 @@ public:
   const VoxelDecayParams& GetVoxelDecayParams() const {
     return voxel_decay_params_;
   }
-  */
 
   /*
   bool IsUsingDepthWeights() const {
