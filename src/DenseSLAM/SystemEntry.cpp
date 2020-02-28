@@ -17,8 +17,8 @@ DEFINE_string(strSettingFile, "", "the path to load the setting file for ORBSLAM
 DEFINE_int32(frame_offset, 0, "The frame index from which to start reading the dataset sequence.");
 DEFINE_int32(frame_limit, 0, "How many frames to process in auto mode. 0 = no limit.");
 DEFINE_bool(voxel_decay, true, "Whether to enable map regularization via voxel decay (a.k.a. voxel garbage collection).");
-DEFINE_int32(min_decay_age, 50, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection).");
-DEFINE_int32(max_decay_weight, 5, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed.");
+DEFINE_int32(min_decay_age, 50, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection)."); //kitti: 5
+DEFINE_int32(max_decay_weight, 1, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed."); //kitti: 2
 DEFINE_int32(kitti_tracking_sequence_id, -1, "Used in conjunction with --dataset_type kitti-tracking.");
 DEFINE_bool(direct_refinement, false, "Whether to refine motion estimates for other cars computed sparsely with RANSAC using a semidense direct image alignment method.");
 // TODO-LOW(andrei): Automatically adjust the voxel GC params when depth weighting is enabled.
@@ -269,9 +269,12 @@ void BuildDenseSlamOdometry(const string &dataset_root,
   }
   else{
     if(FLAGS_use_dispnet){
-       throw runtime_error("Not supported use dispNet under MONOCULAR and RGBD modes.");
+       input_config.read_depth = false; //直接读取的是深度
     }
-    input_config.read_depth = true; //直接读取的是深度图
+    else{
+       input_config.read_depth = true; //直接读取的是深度图
+    }
+
   }
   
   FLAGS_strSettingFile = dataset_root + "/orbslam_param.yaml";
@@ -349,7 +352,8 @@ void BuildDenseSlamOdometry(const string &dataset_root,
       right_color_proj.cast<float>(),
       baseline_m,
       FLAGS_direct_refinement,
-      FLAGS_fusion_every
+      FLAGS_fusion_every,
+      FLAGS_min_decay_age
   );
 }
 
@@ -400,7 +404,8 @@ int main(int argc, char **argv) {
     dataset_type = SparsetoDense::Input::TUM;
   }
   else{
-    dataset_type = SparsetoDense::Input::EUROC;
+      runtime_error("Unspported dataset mode !");
+//    dataset_type = SparsetoDense::Input::EUROC;
   }
   BuildDenseSlamOdometry(dataset_root, &dense_slam, &input, sensor_type, sensor_type_orbslam, dataset_type);
   

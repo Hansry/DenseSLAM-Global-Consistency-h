@@ -2,6 +2,8 @@
 #define DENSESLAM_DENSESLAM_H
 
 #include <Eigen/StdVector>
+#include <eigen3/unsupported/Eigen/MatrixFunctions>
+#include <Eigen/Dense>
 
 #include <pangolin/display/opengl_render_state.h>
 
@@ -9,6 +11,9 @@
 #include "InstRecLib/SparseSFProvider.h"
 #include "Input.h"
 #include "OrbSLAMDriver.h"
+#include <map>
+#include <cmath>
+
 DECLARE_bool(dynamic_weights);
 
 namespace SparsetoDense {
@@ -47,7 +52,8 @@ class DenseSlam {
           const Eigen::Matrix34f& proj_right_rgb,
           float stereo_baseline_m,
           bool enable_direct_refinement,
-          int fusion_every)
+          int fusion_every,
+	  int min_age)
     : static_scene_(itm_static_scene_engine),
       orbslam_static_scene_(orb_static_engine),
       sparse_sf_provider_(sparse_sf_provider),
@@ -63,7 +69,8 @@ class DenseSlam {
       projection_left_rgb_(proj_left_rgb),
       projection_right_rgb_(proj_right_rgb),
       stereo_baseline_m_(stereo_baseline_m),
-      experimental_fusion_every_(fusion_every) 
+      experimental_fusion_every_(fusion_every),
+      new_local_min_age_(min_age)
   {
       mFeatures_ = ExtractKeyPointNum();
       mGoalFeatures_ = 0.5 * mFeatures_;
@@ -198,6 +205,25 @@ public:
   float GetStereoBaseline() const {
     return stereo_baseline_m_;
   }
+  
+   Eigen::Matrix4f MatrixDoubleToFloat(Eigen::Matrix4d Eig_matrix){
+     
+     Eigen::Matrix4f tempMatrix;
+     tempMatrix << (float)Eig_matrix(0,0), (float)Eig_matrix(0,1), (float)Eig_matrix(0,2), (float)Eig_matrix(0,3),
+                   (float)Eig_matrix(1,0), (float)Eig_matrix(1,1), (float)Eig_matrix(1,2), (float)Eig_matrix(1,3),
+                   (float)Eig_matrix(2,0), (float)Eig_matrix(2,1), (float)Eig_matrix(2,2), (float)Eig_matrix(2,3),
+                   (float)Eig_matrix(3,0), (float)Eig_matrix(3,1), (float)Eig_matrix(3,2), (float)Eig_matrix(3,3);
+     return tempMatrix;
+  }
+  
+  Eigen::Matrix4d MatrixFloatToDouble(Eigen::Matrix4f Eig_matrix){
+     Eigen::Matrix4d tempMatrix;
+     tempMatrix << (double)Eig_matrix(0,0), (double)Eig_matrix(0,1), (double)Eig_matrix(0,2), (double)Eig_matrix(0,3),
+                   (double)Eig_matrix(1,0), (double)Eig_matrix(1,1), (double)Eig_matrix(1,2), (double)Eig_matrix(1,3),
+                   (double)Eig_matrix(2,0), (double)Eig_matrix(2,1), (double)Eig_matrix(2,2), (double)Eig_matrix(2,3),
+                   (double)Eig_matrix(3,0), (double)Eig_matrix(3,1), (double)Eig_matrix(3,2), (double)Eig_matrix(3,3);
+     return tempMatrix;
+  }
 
   /// \brief Run voxel decay all the way up to the latest frame.
   /// Useful for cleaning up at the end of the sequence. Should not be used mid-sequence.
@@ -206,6 +232,7 @@ public:
 //   }
   
   void orbslam_static_scene_trackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double& timestamp){
+    cout << "DenseSLAM.h 235" << endl;
     orbslam_static_scene_->orbTrackRGBDSLAM(im,depthmap,timestamp);
   }
   
@@ -217,6 +244,26 @@ public:
     orbslam_static_scene_->orbTrackMonocular(im, timestamp);
   }
   
+  list<ORB_SLAM2::KeyFrame*>* orbslam_static_scene_localBAKF(void){
+    return orbslam_static_scene_->GetOrbSlamLocalBAKeyframe();
+  }
+  
+  std::condition_variable* orbslam_tracking_cond(void) {
+    return orbslam_static_scene_->GetTrackingCondVar();
+  }
+  
+  std::condition_variable* orbslam_tracking_cond_n(void){
+    return orbslam_static_scene_->GetTrackingCondVar_n();
+  }
+  
+  bool* orbslam_tracking_gl(void){
+    return orbslam_static_scene_->GetTrackingGL();
+  }
+  
+  bool* orbslam_tracking_gl_n(void){
+    return orbslam_static_scene_->GetTrackingGL_n();
+  }
+   
   ORB_SLAM2::MapDrawer* GetOrbSlamMapDrawerGlobal() const{
      return orbslam_static_scene_->GetOrbSlamMapDrawer();
   }
@@ -268,7 +315,28 @@ public:
   }
   
   float PDController(int currFeatures, int lastFeatures){
-    float output = mkp*(float)(mGoalFeatures_-currFeatures) + mkd * (float)(lastFeatures-currFeatures)/mDeltaTime_;
+    int currDiff = lastFeatures - currFeatures;
+    /*
+    if(abs(lastFeatures-currFeatures)> 2 * mPreDiff ){
+      if(lastFeatures > currFeatures){
+         currDiff = 2 * mPreDiff;
+      }
+      else{
+	 currDiff = -2 * mPreDiff;
+      }
+    }
+    else{
+      currDiff = lastFeatures - currFeatures;
+    }
+    */
+    
+    /*
+    if(currFeatures > 1.5 * lastFeatures){
+      currFeatures = 1.5 * lastFeatures;
+    }
+    */
+    
+    float output = mkp*(float)(mGoalFeatures_-currFeatures) + mkd * (float)(currDiff)/mDeltaTime_;
     if (output < 0){
       output = 0.0;
     }
@@ -279,9 +347,12 @@ public:
     return PDThreshold_;
   }
   
+  bool is_identity_matrix(cv::Mat matrix);
+  
   bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
   
   int createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose);
+  map<double, std::pair<cv::Mat3b, cv::Mat1s>> mframeDataBase;
   
   SUPPORT_EIGEN_FIELDS;
 
@@ -298,7 +369,13 @@ private:
   cv::Mat3b *input_rgb_image_;
   cv::Mat1s *input_raw_depth_image_;
   
-  int current_frame_no_ = 1;
+  cv::Mat3b input_rgb_image_n;
+  cv::Mat1s input_raw_depth_image_n;
+  
+  cv::Mat3b input_rgb_image_copy_;
+  cv::Mat1s input_raw_depth_image_copy_;
+  
+  int current_frame_no_ = 0;
   int current_keyframe_no_ = 1;
   int input_width_;
   int input_height_;
@@ -307,6 +384,7 @@ private:
   int mFeatures_;
   int mGoalFeatures_;
   int mPreTrackIntensity = 0;
+  int mPreDiff = 0;
   float mkp = 0.8;
   float mkd = 0.08;
   ///由于每一帧的时间（包括深度图计算、VO计算、地图融合）接近100ms左右，故delta_t设为0.1ms
@@ -325,6 +403,7 @@ private:
   
   /// NOTE 判断是否开启新地图的阈值
   const int N_originalblocks = 1000;
+  int new_local_min_age_;
   ///const float F_originalBlocksThreshold = 0.15f; //0.4f
   
   /// 将F_originalBlocksThreadhold设为-1.0,意味这暂时不开启新的地图
@@ -333,6 +412,8 @@ private:
   bool shouldClearPoseHistory = false;
   
   ITMLib::Engine::ITMLocalMap* currentLocalMap = NULL;
+  std::queue<pair<ORB_SLAM2::KeyFrame, cv::Mat>> mkeyframeForNewLocalMap;
+  std::mutex mMutexKeyframeQueue;
  
  // std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f>> pose_history_;
   std::vector<Eigen::Matrix4f> pose_history_;
@@ -359,6 +440,14 @@ private:
   /// \brief Returns a path to the folder where the dataset's meshes should be dumped, creating it
   ///        using a native system call if it does not exist.
   std::string EnsureDumpFolderExists(const string& dataset_name) const;
+  
+  
+  ORB_SLAM2::KeyFrame* mcurrBAKeyframe;
+  
+  std::mutex mMutexFrameDataBase;
+  std::mutex mMutexBAKF;
+  std::mutex mMutexCond;
+  std::mutex mMutexCond1;
 };
 
 }

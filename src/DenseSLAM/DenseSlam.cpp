@@ -7,10 +7,10 @@
 DEFINE_bool(dynamic_weights, false, "Whether to use depth-based weighting when performing fusion.");
 DECLARE_bool(semantic_evaluation);
 DECLARE_int32(evaluation_delay);
-DEFINE_bool(external_odo, true, "Whether to use external VO");
 DEFINE_bool(useOrbSLAMVO, true, "Whether to use OrbSLAM VO");
 DEFINE_bool(useSparseFlowVO, true, "Whether to use SparseFlow VO");
 DEFINE_bool(useOrbSLMKeyFrame, true, "Whether to use Keyframe strategy in ORB_SLAM2");
+DEFINE_bool(external_odo, true, "Whether to use external VO");
 DEFINE_bool(useFusion, true, "Whether to use Fusion Strategy");
 
 
@@ -23,7 +23,6 @@ void DenseSlam::ProcessFrame(Input *input) {
      return;
   }
   
-  
   utils::Tic("Read input and compute depth");
   if(!input->ReadNextFrame()) {
      throw runtime_error("Could not read input from the data source.");
@@ -32,59 +31,86 @@ void DenseSlam::ProcessFrame(Input *input) {
   /// @brief 更新当前buf存储的color image和 depth 
   input->GetCvImages(&input_rgb_image_, &input_raw_depth_image_);
   utils::Toc();
-
   
-  /// @brief 对orbslam进行跟踪，同时进行线程的分离(其实感觉没啥用哈哈哈)
+  /// @brief 对orbslam进行跟踪，同时进行线程的分离
   utils::Tic("Compute VO");
+  
+  input_rgb_image_n = (*input_rgb_image_).clone();
+  input_raw_depth_image_n = (*input_raw_depth_image_).clone();
+  
   future<void> orbslamVO = async(launch::async, [this, &input]{
-  cv::Mat orbSLAMInputDepth(input_raw_depth_image_->rows, input_raw_depth_image_->cols, CV_32FC1);
+  std::cout << "denseslam 40: "<< std::endl;
+  cv::Mat orbSLAMInputDepth(input_raw_depth_image_n.rows, input_raw_depth_image_n.cols, CV_32FC1);
+  cv::Mat orbSLAMInputRGB(input_rgb_image_n.rows, input_rgb_image_n.cols, CV_32FC3);
 
-  for(int row =0; row<input_rgb_image_->rows; row++){
-    for(int col =0; col<input_rgb_image_->cols; col++){
-      orbSLAMInputDepth.at<float>(row,col) = ((float)input_raw_depth_image_->at<int16_t>(row,col))/1000.0;
+  for(int row =0; row<input_rgb_image_n.rows; row++){
+    for(int col =0; col<input_rgb_image_n.cols; col++){
+      orbSLAMInputDepth.at<float>(row,col) = ((float)input_raw_depth_image_n.at<int16_t>(row,col))/1000.0;
     }
   }
+  
+  std::cout << "denseslam 49: " << std::endl;
   
 //   imshow("orbSLAMInputDepth: ", orbSLAMInputDepth);
 //   cv::waitKey(0);
   
   if(input->GetSensorType() == Input::RGBD){
-     orbslam_static_scene_trackRGBD(*input_rgb_image_, 
+     orbslam_static_scene_trackRGBD(input_rgb_image_n, 
 				    orbSLAMInputDepth, 
 				    (double)current_frame_no_);
   }
   else if(input->GetSensorType() == Input::STEREO){
-     cv::Mat3b* right_color_image = new cv::Mat3b(input_rgb_image_->rows, input_rgb_image_->cols);
+     cv::Mat3b* right_color_image = new cv::Mat3b(input_rgb_image_n.rows, input_rgb_image_n.cols);
      input->GetRightColor(*right_color_image);
-     orbslam_static_scene_trackStereo(*input_rgb_image_, *right_color_image, (double)current_frame_no_);
+     orbslam_static_scene_trackStereo(input_rgb_image_n, *right_color_image, (double)current_frame_no_);
      delete right_color_image;
   }
   else if(input->GetSensorType() == Input::MONOCULAR){
-     orbslam_static_scene_trackMonular(*input_rgb_image_, (double)current_frame_no_);
+     orbslam_static_scene_trackMonular(input_rgb_image_n, (double)current_frame_no_);
   }
+  
+  std:: cout << "denseslam 68: "<<std::endl;
+  { 
+     unique_lock<mutex> lock(mMutexFrameDataBase);
+     mframeDataBase[current_frame_no_]= make_pair((input_rgb_image_n), (input_raw_depth_image_n));
+  }
+  std::cout << "denseslam 76: "<<std::endl;
+     current_frame_no_++;
   });  
   
-  /// NOTE 如果当前帧不是关键帧，那么则不进行融合或者更新，直接就return
-  orbslamVO.get();
-  orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
-  //orbSLAMTrackingState == -1意味着系统未准备好，==1意味着没有初始化成功,对于单目来说需要判断是否初始化
-  if(orbSLAMTrackingState==-1 ||  orbSLAMTrackingState == 1){
-    current_frame_no_++;
-    utils::Toc();
-    return;
-  }
-  
+  /*
   lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
   mTrackIntensity = GetOrbSlamTrackerGlobal()->getMatchInlier();
   
   //在这里实现PD控制器的实现，以及特征点的设置
   PDThreshold_ = PDController(mTrackIntensity, mPreTrackIntensity);
+  mPreDiff = abs(mTrackIntensity-mPreTrackIntensity);
   mPreTrackIntensity = mTrackIntensity;
+  */
   
   ///当threadhold大于mTrackIntensity的时候，就说明此时需要进行位姿的融合了
-  if(!first_frame && PDThreshold_ > mTrackIntensity && FLAGS_useFusion){
+  if(!first_frame && FLAGS_useFusion && FLAGS_external_odo){
       utils::Tic("Fusion Pose of VO");
+      
+      {
+	unique_lock<mutex> locker(mMutexCond);
+	while(!(*orbslam_tracking_gl_n())){
+	  orbslam_tracking_cond_n()->wait(locker);
+	}
+	*orbslam_tracking_gl_n() = false;
+      }
+      
+      cout << "denseslam 99: "<<endl;
+      std::this_thread::sleep_for(std::chrono::milliseconds(25));//至于休眠多长时间还需要测试
       currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
+      cout << "denseslam 106: "<<endl;
+      cv::Mat tempPose = orbslam_static_scene_->GetPose();
+      cout << "denseslam 108 :" << endl;
+      if(!is_identity_matrix(tempPose)){
+         static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(tempPose));
+      }
+      cout << "tempPose: " << ORB_SLAM2::drivers::MatToEigen(tempPose.inv()) << endl;
+
       //主要为跟踪做准备
       static_scene_->PrepareNextStepLocalMap(currentLocalMap);
       //更新当前的RGB及深度图
@@ -92,42 +118,70 @@ void DenseSlam::ProcessFrame(Input *input) {
       //做跟踪
       static_scene_->TrackLocalMap(currentLocalMap);
       //由raycast得到的深度图与当前深度图做ICP跟踪得到的位姿Tw->c
-      ITMLib::Objects::ITMPose tempDensePose;
-      tempDensePose.SetInvM(drivers::EigenToItm(static_scene_->GetLocalMapPose(currentLocalMap)));
+      Eigen::Matrix4d tempDensePose;
+      tempDensePose = MatrixFloatToDouble(static_scene_->GetLocalMapPose(currentLocalMap));
+      /*
       //由orbSLAM2计算出来的位姿Tw->c
       orbSLAM2_Pose = orbslam_static_scene_->GetPose();
-      ITMLib::Objects::ITMPose tempSlamPose;
-      tempSlamPose.SetInvM(drivers::EigenToItm(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)));
-      ITMLib::Objects::ITMPose tempfusionPose;
-      int diff = PDThreshold_ - mTrackIntensity;
-      float ratio = (float)diff/(float)PDThreshold_;
-      /// Pose的存储顺序应该为：
-      /// tx,ty,tz,rx,ry,rz
-      float pose[6]= {0.0};
-      for(int i=0; i<6 ; i++){
-	  pose[i] = ratio * tempDensePose.GetParams()[i] + (1-ratio) * tempSlamPose.GetParams()[i];
+      Eigen::Matrix4d tempSlamPose;
+      tempSlamPose = MatrixFloatToDouble(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
+      Eigen::Matrix4d tempfusionPose;
+
+      float ratio = 0.0;
+      float ratioTemp = 0.0;
+      int diff = 0.0;
+      if(PDThreshold_ > mTrackIntensity){
+	 diff = PDThreshold_ - mTrackIntensity;
+	 ratioTemp = (float)diff/(float)PDThreshold_;
+	 ratio = ratioTemp>0.5?ratioTemp:(1-ratioTemp);
       }
-      tempfusionPose.SetFrom(pose);
-      tempfusionPose.Coerce();
-      //其中tempfusionPose.GetM()为Tc->w
-//       cout << "SetCurrFrameToWorldPose: " << tempSlamPose.GetInvM() << endl;
-//       cout << "Fusion Pose: "<< tempfusionPose.GetInvM() << endl;
-      orbslam_static_scene_->SetCurrFrameToWorldPose(ORB_SLAM2::drivers::EigenToMat(drivers::ItmToEigen(tempfusionPose.GetM())));
+      else{
+	 diff = mTrackIntensity - PDThreshold_;
+	 ratioTemp = (float)diff/(float)mTrackIntensity;
+	 ratio = ratioTemp<0.5?ratioTemp:(1-ratioTemp);
+      }
+      Eigen::Matrix4d poseDiff = tempDensePose * tempSlamPose.inverse();
+      Eigen::MatrixPower<Eigen::Matrix4d> Apow(poseDiff);
+      tempfusionPose = Apow(ratio)*tempSlamPose;
+      orbslam_static_scene_->SetCurrFrameToWorldPose(ORB_SLAM2::drivers::EigenToMat(MatrixDoubleToFloat(tempfusionPose)));
+      */
+      cout << "DensSlam.cpp: 122:" << tempDensePose.inverse() << endl;
+      orbslam_static_scene_->SetTrackingPose(ORB_SLAM2::drivers::EigenToMat(MatrixDoubleToFloat(tempDensePose).inverse()));
+      {
+	unique_lock<mutex> locker1(mMutexCond1);
+        *orbslam_tracking_gl()=true;
+        orbslam_tracking_cond()->notify_one();
+      }
       utils::Toc();
+//       orbslamVO.get();
+//       *orbslam_tracking_gl()=false;
+  }  
+    
+  ///从OrbSlam中的localMapping线程提取经过localBA后的当前帧
+  if(orbslam_static_scene_localBAKF()->empty()){
+       return;
   }
-  
-  /// 需要是关键帧的时候才进行地图的融合
-  if((int)lastKeyFrameTimeStamp != current_frame_no_){
-        current_frame_no_++;
-	utils::Toc();
-        return;
+  mcurrBAKeyframe = orbslam_static_scene_localBAKF()->front();
+  orbslam_static_scene_localBAKF()->pop_front();
+  if(mcurrBAKeyframe->isBad()){
+     return;
   }
-  
-  /// NOTE 若当前帧为关键帧，则得到当前帧在世界坐标系下的位姿以及跟踪状态
-  orbSLAM2_Pose = orbslam_static_scene_->GetPose();
-//   cout << "orbSLAM2_Pose: " << orbSLAM2_Pose << endl;
-  
-  /// NOTE 如果是第一帧，则创建子地图，设置创建的子地图基于世界坐标系的位姿，这部分代码主要用于多子图的构建，目前暂时不是很重要
+  double currBAKFTime = mcurrBAKeyframe->mTimeStamp;
+  {
+    unique_lock<mutex> lock(mMutexBAKF);
+    std::map<double, std::pair<cv::Mat3b, cv::Mat1s>>::iterator iter;
+    iter = mframeDataBase.find(currBAKFTime);
+    if(iter != mframeDataBase.end()){
+      input_rgb_image_copy_ = (iter->second.first).clone();
+      input_raw_depth_image_copy_ = (iter->second.second).clone();
+      mframeDataBase.erase(iter);
+    }
+    else{
+	 return;
+    }
+  }
+  orbSLAM2_Pose = mcurrBAKeyframe->GetPoseInverse();
+  /// NOTE 如果是第一帧，则创建子地图，设置创建的子地图基于世界坐标系的位姿，这部分代码主要用于多子图的构建
   if(first_frame || shouldCreateNewLocalMap){
     int currentLocalMapIdx = static_scene_->GetMapManager()->createNewLocalMap();
     ITMLib::Objects::ITMPose tempPose;
@@ -138,16 +192,16 @@ void DenseSlam::ProcessFrame(Input *input) {
 				     lastKeyFrameTimeStamp,
 				     lastKeyFrameTimeStamp));
     
-    /// NOTE 这里由于显卡内存不足，只能在创建新子地图的时候将前一个子地图给remove掉
-//    if(todoList.size()>1){
-//       static_scene_->GetMapManager()->removeLocalMap(todoList.front().dataId);
-//       int swapOutLocalMapID = todoList[todoList.size()-2].dataId;
-//       future<void> swap_out = async(launch::async, [this, &swapOutLocalMapID]{
-// 	   saveLocalMapToHostMemory(swapOutLocalMapID);
-//       });
-//    }
-    shouldCreateNewLocalMap = false;
+    *orbslam_tracking_gl()=true;
+    orbslam_tracking_cond()->notify_one();
+//     orbslamVO.get();
+//     *orbslam_tracking_gl() = false;
+    
+//     shouldCreateNewLocalMap = false;
+    first_frame = false;
   }
+  
+  orbslamVO.get();
   
   //这个判断条件主要是避免重复调用多的currentLocalMap
   if(currentLocalMap == NULL){
@@ -160,7 +214,8 @@ void DenseSlam::ProcessFrame(Input *input) {
     /// 使用ORBSLAM的里程计
     if(FLAGS_useOrbSLAMVO){
       /// NOTE "2"意味着 OrbSLAM 跟踪成功
-      if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
+      /// 由于调用的是LocalBA后的位姿，因此可以不需要是否跟踪成功
+      if(!orbSLAM2_Pose.empty()){
 	    static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
 	    Eigen::Matrix4f currLocalMapPose = drivers::ItmToEigen(currentLocalMap->estimatedGlobalPose.GetM());
 	    if(shouldClearPoseHistory){
@@ -228,40 +283,34 @@ void DenseSlam::ProcessFrame(Input *input) {
       ssf_and_vo.get();
     }
   }
-  /// 使用内部使用的里程计，目前还没有写好
+  /// 使用内部使用的里程计
   else{
-     runtime_error("Currently unsupported VO mode!");
-     orbslamVO.get();
-     orbSLAM2_Pose = orbslam_static_scene_->GetPose();
-     orbSLAMTrackingState = orbslam_static_scene_->GetOrbSlamTrackingState();
-     /// NOTE "2"意味着 OrbSLAM 跟踪成功
-     if(!orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2){
-	   static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose).inverse());
-	   pose_history_.push_back(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
-    }
+      currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
+      //主要为跟踪做准备
+      static_scene_->PrepareNextStepLocalMap(currentLocalMap);
+      //更新当前的RGB及深度图
+      static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_);
+      //做跟踪
+      static_scene_->TrackLocalMap(currentLocalMap);
+      //由raycast得到的深度图与当前深度图做ICP跟踪得到的位姿Tw->c
   }
   utils::Toc();
   
   utils::Tic("Static map fusion");
- /// NOTE orbSLAMTrackingState == 2 意味着orbslam跟踪成功
-  if (current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty() && orbSLAMTrackingState == 2) {
-       if(first_frame || PDThreshold_ < mTrackIntensity || !FLAGS_useFusion){
-          static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
-       }
+  if (FLAGS_external_odo && current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty()) {
+       static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_);
        static_scene_->IntegrateLocalMap(currentLocalMap);
-       //由于PrepareNextStepLocalMap为raycast准备下一帧进行ICP求位姿用的，因此如果使用orbslam作为VO的话，可以不使用这个函数
-//     static_scene_->PrepareNextStepLocalMap(currentLocalMap);
-//     Decay old, possibly noisy, voxels to improve map quality and reduce its memory footprint.
        utils::Tic("Map decay");
        Decay();
        utils::Toc();
    }
    else{
       if (current_frame_no_ % experimental_fusion_every_ == 0) {
-	 if(first_frame || PDThreshold_ < mTrackIntensity || !FLAGS_useFusion){
-            static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
-         }
+//          static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_);
          static_scene_->IntegrateLocalMap(currentLocalMap);
+	 utils::Tic("Map decay");
+         Decay();
+         utils::Toc();
       }
    }
    utils::Toc();
@@ -271,8 +320,23 @@ void DenseSlam::ProcessFrame(Input *input) {
        shouldClearPoseHistory = true;
   }
   */
-   current_frame_no_++;
    current_keyframe_no_ ++;
+}
+
+bool DenseSlam::is_identity_matrix(cv::Mat matrix){
+  int flags = 1;
+  for(int row=0; row<matrix.rows; row++){
+    for(int col=0; col<matrix.cols; col++){
+      if(matrix.at<float>(row,row) != 1.0){
+	flags = 0;
+      }
+      if(row != col && matrix.at<float>(row, col) != 0.0){
+	flags = 0;
+      }
+    }
+  }
+  if(flags == 0) {return false;}
+  else {return true;}
 }
 
 bool DenseSlam::shouldStartNewLocalMap(int CurrentLocalMapIdx) const {
@@ -314,5 +378,4 @@ std::string DenseSlam::EnsureDumpFolderExists(const string &dataset_name) const 
 
   return target_folder;
 }
-
 }

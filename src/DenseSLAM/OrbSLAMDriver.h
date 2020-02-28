@@ -8,6 +8,7 @@
 #include "../ORB-SLAM2-API-M/include/MapDrawer.h"
 #include "../ORB-SLAM2-API-M/include/FrameDrawer.h"
 #include "../ORB-SLAM2-API-M/include/Tracking.h"
+#include "../ORB-SLAM2-API-M/include/LocalMapping.h"
 #include <Eigen/Core>
 
 namespace ORB_SLAM2{
@@ -34,7 +35,7 @@ public:
     virtual ~OrbSLAMDriver() {
     }
     
-    ///@brief 返回世界坐标系到当前帧的变换Tcw
+    ///@brief 返回世界坐标系到当前帧的变换Twc
     cv::Mat GetPose() const{
       cv::Mat OrbSLAMWorldToCurrFramePose = this->GetWorldToCurrFramePose();
       return OrbSLAMWorldToCurrFramePose;
@@ -92,10 +93,37 @@ public:
        return strSettingsFile_;
     }
     
+    list<ORB_SLAM2::KeyFrame*>* GetOrbSlamLocalBAKeyframe() {
+      return this->GetLocalMapper()->getProcessKeyFrames();
+    }
+    
+    std::condition_variable* GetTrackingCondVar() {
+      return this->GetTracker()->getCond();
+    }
+    
+    std::condition_variable* GetTrackingCondVar_n() {
+       return this->GetTracker()->getCond_n();
+    }
+    
+    bool* GetTrackingGL() {
+      return this->GetTracker()->getGlobalLable();
+    }
+    
+    bool* GetTrackingGL_n() {
+      return this->GetTracker()->getGlobalLable_n();
+    }
+    
+
+    
+    void SetTrackingPose(cv::Mat Tcw){
+      this->GetTracker()->mCurrentFrame.SetPose(Tcw);
+    }
+    
 private:
     Eigen::Matrix4f last_egomotion_;
     string strSettingsFile_;    
-};
+    
+ };
 }//driver
 }// ORB_SLAM2
 #endif
