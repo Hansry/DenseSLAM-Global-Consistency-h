@@ -113,10 +113,12 @@ public:
       return this->GetTracker()->getGlobalLable_n();
     }
     
-
-    
     void SetTrackingPose(cv::Mat Tcw){
       this->GetTracker()->mCurrentFrame.SetPose(Tcw);
+    }
+    
+    void SaveTUMTrajectory(const string& filename){
+      this->SaveKeyFrameTrajectoryTUM(filename);
     }
     
 private:

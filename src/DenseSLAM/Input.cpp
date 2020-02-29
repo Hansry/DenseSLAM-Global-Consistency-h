@@ -40,9 +40,14 @@ bool Input::ReadNextFrame() {
   /// @brief 读取id为frame_idx的color image,并将其保存在left or right_frame_color_buf_中
   if(mDatasetType == KITTI){
     ReadLeftColor(frame_idx_int, left_frame_color_buf_);
+    currentFrameTimeStamp = (double)frame_idx_int;
   }
   else if(mDatasetType == TUM){
     ReadLeftColor(frame_idx_pair.first, left_frame_color_buf_);
+    string tempString = frame_idx_pair.first;
+    std::istringstream ss(tempString);
+    ss >> currentFrameTimeStamp;
+    printf("%s%f\n","Input 50: currentFrame:",currentFrameTimeStamp);
   }
   else{
     runtime_error("Currently Unspported dataset type !");
@@ -58,7 +63,7 @@ bool Input::ReadNextFrame() {
   
   if(mSensor==Input::STEREO){
     if(mDatasetType == KITTI){
-       ReadRightColor(frame_idx_int, right_frame_color_buf_);;
+       ReadRightColor(frame_idx_int, right_frame_color_buf_);
     }
     else if(mDatasetType == TUM){
        ReadRightColor(frame_idx_pair.first, right_frame_color_buf_);
@@ -121,6 +126,8 @@ bool Input::ReadNextFrame() {
   frame_idx_int = frame_idx_index; 
   return true;
 }
+
+
 
 void Input::GetCvImages(cv::Mat3b **rgb, cv::Mat1s **raw_depth) {
   *rgb = &left_frame_color_buf_;

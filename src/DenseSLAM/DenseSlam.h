@@ -347,6 +347,10 @@ public:
     return PDThreshold_;
   }
   
+  void SaveTUMTrajectory(const string& filename){
+    orbslam_static_scene_->SaveTUMTrajectory(filename);
+  }
+  
   bool is_identity_matrix(cv::Mat matrix);
   
   bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
@@ -363,6 +367,8 @@ private:
 //   dynslam::eval::Evaluation *evaluation_;
   
   std::vector<TodoListEntry> todoList;
+  
+  double currFrameTimeStamp;
 
   ITMUChar4Image *out_image_;
   ITMFloatImage *out_image_float_;

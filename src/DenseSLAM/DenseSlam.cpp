@@ -23,10 +23,15 @@ void DenseSlam::ProcessFrame(Input *input) {
      return;
   }
   
+  
   utils::Tic("Read input and compute depth");
   if(!input->ReadNextFrame()) {
      throw runtime_error("Could not read input from the data source.");
   }
+  
+  currFrameTimeStamp = input->GetCurrentFrame_double();
+//   printf("%s%f", "DenseSlam26, currentFrame TimeStamp: \n", currFrameTimeStamp);
+  
   bool first_frame = (current_keyframe_no_ == 1);
   /// @brief 更新当前buf存储的color image和 depth 
   input->GetCvImages(&input_rgb_image_, &input_raw_depth_image_);
@@ -39,7 +44,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   input_raw_depth_image_n = (*input_raw_depth_image_).clone();
   
   future<void> orbslamVO = async(launch::async, [this, &input]{
-  std::cout << "denseslam 40: "<< std::endl;
+//   std::cout << "denseslam 40: "<< std::endl;
   cv::Mat orbSLAMInputDepth(input_raw_depth_image_n.rows, input_raw_depth_image_n.cols, CV_32FC1);
   cv::Mat orbSLAMInputRGB(input_rgb_image_n.rows, input_rgb_image_n.cols, CV_32FC3);
 
@@ -49,7 +54,7 @@ void DenseSlam::ProcessFrame(Input *input) {
     }
   }
   
-  std::cout << "denseslam 49: " << std::endl;
+//   std::cout << "denseslam 49: " << std::endl;
   
 //   imshow("orbSLAMInputDepth: ", orbSLAMInputDepth);
 //   cv::waitKey(0);
@@ -57,22 +62,22 @@ void DenseSlam::ProcessFrame(Input *input) {
   if(input->GetSensorType() == Input::RGBD){
      orbslam_static_scene_trackRGBD(input_rgb_image_n, 
 				    orbSLAMInputDepth, 
-				    (double)current_frame_no_);
+				    currFrameTimeStamp);
   }
   else if(input->GetSensorType() == Input::STEREO){
      cv::Mat3b* right_color_image = new cv::Mat3b(input_rgb_image_n.rows, input_rgb_image_n.cols);
      input->GetRightColor(*right_color_image);
-     orbslam_static_scene_trackStereo(input_rgb_image_n, *right_color_image, (double)current_frame_no_);
+     orbslam_static_scene_trackStereo(input_rgb_image_n, *right_color_image, currFrameTimeStamp);
      delete right_color_image;
   }
   else if(input->GetSensorType() == Input::MONOCULAR){
-     orbslam_static_scene_trackMonular(input_rgb_image_n, (double)current_frame_no_);
+     orbslam_static_scene_trackMonular(input_rgb_image_n, currFrameTimeStamp);
   }
   
-  std:: cout << "denseslam 68: "<<std::endl;
+//   std:: cout << "denseslam 68: "<<std::endl;
   { 
      unique_lock<mutex> lock(mMutexFrameDataBase);
-     mframeDataBase[current_frame_no_]= make_pair((input_rgb_image_n), (input_raw_depth_image_n));
+     mframeDataBase[currFrameTimeStamp]= make_pair((input_rgb_image_n), (input_raw_depth_image_n));
   }
   std::cout << "denseslam 76: "<<std::endl;
      current_frame_no_++;
@@ -100,16 +105,16 @@ void DenseSlam::ProcessFrame(Input *input) {
 	*orbslam_tracking_gl_n() = false;
       }
       
-      cout << "denseslam 99: "<<endl;
+//       cout << "denseslam 99: "<<endl;
       std::this_thread::sleep_for(std::chrono::milliseconds(25));//至于休眠多长时间还需要测试
       currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
-      cout << "denseslam 106: "<<endl;
+//       cout << "denseslam 106: "<<endl;
       cv::Mat tempPose = orbslam_static_scene_->GetPose();
-      cout << "denseslam 108 :" << endl;
+//       cout << "denseslam 108 :" << endl;
       if(!is_identity_matrix(tempPose)){
          static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(tempPose));
       }
-      cout << "tempPose: " << ORB_SLAM2::drivers::MatToEigen(tempPose.inv()) << endl;
+//       cout << "tempPose: " << ORB_SLAM2::drivers::MatToEigen(tempPose.inv()) << endl;
 
       //主要为跟踪做准备
       static_scene_->PrepareNextStepLocalMap(currentLocalMap);
@@ -167,6 +172,7 @@ void DenseSlam::ProcessFrame(Input *input) {
      return;
   }
   double currBAKFTime = mcurrBAKeyframe->mTimeStamp;
+//   cout << "DenseSlam.cpp 175: currBAKFTime: " << currBAKFTime << endl;
   {
     unique_lock<mutex> lock(mMutexBAKF);
     std::map<double, std::pair<cv::Mat3b, cv::Mat1s>>::iterator iter;

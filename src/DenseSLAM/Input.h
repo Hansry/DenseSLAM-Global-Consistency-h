@@ -92,7 +92,7 @@ public:
 
     config.velodyne_folder        = "velodyne";
     config.velodyne_fname_format  = "%06d.bin";
-    config.frame_timestamp        = "";
+    config.frame_timestamp= "";
 
     return config;
   };
@@ -260,7 +260,11 @@ public:
   eDatasetType GetDatasetType() const{
     return mDatasetType;
   }
-
+  
+  double GetCurrentFrame_double(void) const{
+    return currentFrameTimeStamp;
+  }
+  
  private:
   //数据类型
   eSensor mSensor;
@@ -281,7 +285,9 @@ public:
   int frame_height_;
 
   StereoCalibration stereo_calibration_;
-
+  
+  double currentFrameTimeStamp;
+  
   cv::Mat3b left_frame_color_buf_;
   cv::Mat3b right_frame_color_buf_;
   cv::Mat1s depth_buf_;
