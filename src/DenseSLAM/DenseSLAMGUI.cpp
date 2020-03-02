@@ -279,101 +279,6 @@ void PangolinGui::Run(){
     }
 }
 
-void PangolinGui::DiffDepthmaps(const cv::Mat1s& input_depthmap, 
-				const float* rendered_depth, 
-				int width, 
-				int height, 
-				int delta_max, 
-				uchar* out_image, 
-				float baseline_m, 
-				float focal_length_px){
-      for (int i = 0; i < height; ++i) {
-      for (int j = 0; j < width; ++j) {
-        int in_idx = (i * width + j);
-        int out_idx = (i * width + j) * 4;
-        float input_depth_m = input_depthmap.at<short>(i, j) / 1000.0f;
-        float rendered_depth_m = rendered_depth[in_idx];
-
-        float input_disp = baseline_m * focal_length_px / input_depth_m;
-        float rendered_disp = baseline_m * focal_length_px / rendered_depth_m;
-
-        if (input_depth_m == 0 || fabs(rendered_depth_m < 1e-5)) {
-          continue;
-        }
-
-        float delta = input_disp - rendered_disp;
-        float abs_delta = fabs(delta);
-        if (abs_delta > delta_max) {
-          // Visualize SIGNED delta to highlight areas where a particular method tends to
-          // consistently over/underestimate.
-          if (delta > 0) {
-            out_image[out_idx + 0] = 0;
-            out_image[out_idx + 1] = min(255, static_cast<int>(50 + (abs_delta - delta) * 10));
-            out_image[out_idx + 2] = min(255, static_cast<int>(50 + (abs_delta - delta) * 10));
-          }
-          else {
-            out_image[out_idx + 0] = min(255, static_cast<int>(50 + (abs_delta - delta) * 10));
-            out_image[out_idx + 1] = min(255, static_cast<int>(50 + (abs_delta - delta) * 10));
-            out_image[out_idx + 2] = 0;
-          }
-        }
-        else {
-          out_image[out_idx + 0] = 0;
-          out_image[out_idx + 1] = 255;
-          out_image[out_idx + 2] = 0;
-        }
-      }
-    }
-}
-
-void PangolinGui::PreviewLidar(const Eigen::MatrixX4f& lidar_points, 
-			       const Eigen::Matrix34f& P, 
-			       const Eigen::Matrix4f& Tr, 
-			       const pangolin::View& view){
-    // convert every velo point into 2D as: x_i = P * Tr * X_i
-    if (lidar_points.rows() == 0) {
-      return;
-    }
-    size_t idx_v = 0;
-    size_t idx_c = 0;
-    glDisable(GL_DEPTH_TEST);
-    for (int i = 0; i < lidar_points.rows(); ++i) {
-      Eigen::Vector4f point = lidar_points.row(i);
-      float reflectance = lidar_points(i, 3);
-      point(3) = 1.0f;                // Replace reflectance with the homogeneous 1.
-
-      Eigen::Vector4f p3d = Tr * point;
-      p3d /= p3d(3);
-      float Z = p3d(2);
-
-      lidar_vis_vertices_[idx_v++] = p3d(0);
-      lidar_vis_vertices_[idx_v++] = p3d(1);
-      lidar_vis_vertices_[idx_v++] = p3d(2);
-
-      float intensity = min(8.0f / Z, 1.0f);
-      lidar_vis_colors_[idx_c++] = static_cast<uchar>(intensity * 255);
-      lidar_vis_colors_[idx_c++] = static_cast<uchar>(intensity * 255);
-      lidar_vis_colors_[idx_c++] = static_cast<uchar>(reflectance * 255);
-    }
-
-    float fx = P(0, 0);
-    float fy = P(1, 1);
-    float cx = P(0, 2);
-    float cy = P(1, 2);
-    auto proj = pangolin::ProjectionMatrix(width_, height_, fx, fy, cx, cy, 0.01, 1000);
-
-    pangolin::OpenGlRenderState state(
-        proj, pangolin::IdentityMatrix().RotateX(M_PI)
-    );
-    state.Apply();
-
-    // TODO-LOW(andrei): For increased performance (unnecessary), consider just passing ptr to
-    // internal eigen data. Make sure its row-major though, and the modelview matrix is set properly
-    // based on the velo-to-camera matrix.
-    pangolin::glDrawColoredVertices<float>(idx_v / 3, lidar_vis_vertices_, lidar_vis_colors_, GL_POINTS, 3, 3);
-    glEnable(GL_DEPTH_TEST);
-}
-
 void PangolinGui::CreatePangolinDisplays(){
          
     pangolin::CreateWindowAndBind("DenseSLAM GUI",
@@ -649,7 +554,8 @@ void PangolinGui::CreatePangolinDisplays(){
 void PangolinGui::ProcessFrame(){
     cout << endl << "[Starting frame " << dense_slam_->GetCurrentFrameNo() + 1 << "]" << endl;
     if (! dense_slam_input_->HasMoreImages()){
-      dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
+//       dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
+      dense_slam_->SaveKeyFrameTrajectoryTUMEX("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
       cout << "No more images, Bye!" << endl;
       getchar();
     }

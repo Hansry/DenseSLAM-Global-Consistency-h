@@ -232,7 +232,6 @@ public:
 //   }
   
   void orbslam_static_scene_trackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double& timestamp){
-    cout << "DenseSLAM.h 235" << endl;
     orbslam_static_scene_->orbTrackRGBDSLAM(im,depthmap,timestamp);
   }
   
@@ -254,6 +253,10 @@ public:
   
   std::condition_variable* orbslam_tracking_cond_n(void){
     return orbslam_static_scene_->GetTrackingCondVar_n();
+  }
+  
+  bool* orbslam_tracking_isDenseMapCreate(void){
+    return orbslam_static_scene_->GetIsDenseMapCreate();
   }
   
   bool* orbslam_tracking_gl(void){
@@ -355,8 +358,14 @@ public:
   
   bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
   
+  void SaveKeyFrameTrajectoryTUMEX(const string &filename);
+  std::vector<float> toQuaternion(const cv::Mat &M);
+  Eigen::Matrix<double,3,3> toMatrix3d(const cv::Mat &cvMat3);
+
   int createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose);
   map<double, std::pair<cv::Mat3b, cv::Mat1s>> mframeDataBase;
+  
+  vector<pair<double, Eigen::Matrix4f>> mframePoseBase;
   
   SUPPORT_EIGEN_FIELDS;
 
@@ -365,6 +374,12 @@ private:
   ORB_SLAM2::drivers::OrbSLAMDriver *orbslam_static_scene_;
   SparseSFProvider *sparse_sf_provider_;
 //   dynslam::eval::Evaluation *evaluation_;
+  
+  int NoInitialNum = 0;
+  bool first_frame = true;
+  
+  cv::Mat tempPose;
+  Eigen::Matrix4d tempDensePose;
   
   std::vector<TodoListEntry> todoList;
   
@@ -414,7 +429,7 @@ private:
   
   /// 将F_originalBlocksThreadhold设为-1.0,意味这暂时不开启新的地图
   const float F_originalBlocksThreshold = -1.0f;
-  bool shouldCreateNewLocalMap = false;
+  bool shouldCreateNewLocalMap = true;
   bool shouldClearPoseHistory = false;
   
   ITMLib::Engine::ITMLocalMap* currentLocalMap = NULL;

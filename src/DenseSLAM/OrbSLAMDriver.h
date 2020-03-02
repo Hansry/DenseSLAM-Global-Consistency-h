@@ -105,6 +105,10 @@ public:
        return this->GetTracker()->getCond_n();
     }
     
+    bool* GetIsDenseMapCreate() {
+      return this->GetTracker()->getIsDenseMapCreate();
+    }
+    
     bool* GetTrackingGL() {
       return this->GetTracker()->getGlobalLable();
     }
