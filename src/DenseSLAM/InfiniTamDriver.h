@@ -232,8 +232,8 @@ public:
 
   Eigen::Matrix4f GetLocalMapPose(const ITMLocalMap* currentLocalMap) const{
       Matrix4f Tw_LocalMap = currentLocalMap->estimatedGlobalPose.GetInvM();
-      return ItmToEigen(currentLocalMap->trackingState->pose_d->GetInvM());
-//       return ItmToEigen( Tw_LocalMap * (currentLocalMap->trackingState->pose_d->GetInvM()));
+//       return ItmToEigen(currentLocalMap->trackingState->pose_d->GetInvM());
+      return ItmToEigen( Tw_LocalMap * (currentLocalMap->trackingState->pose_d->GetInvM()));
   }
   
   /// \brief 返回前一帧到当前帧的变换， transform of from previous to current 

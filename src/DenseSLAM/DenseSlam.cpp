@@ -10,8 +10,8 @@ DECLARE_int32(evaluation_delay);
 DEFINE_bool(useOrbSLAMVO, true, "Whether to use OrbSLAM VO");
 DEFINE_bool(useSparseFlowVO, true, "Whether to use SparseFlow VO");
 DEFINE_bool(useOrbSLMKeyFrame, true, "Whether to use Keyframe strategy in ORB_SLAM2");
-DEFINE_bool(external_odo, false, "Whether to use external VO");
-DEFINE_bool(useFusion, false, "Whether to use Fusion Strategy");
+DEFINE_bool(external_odo, true, "Whether to use external VO");
+DEFINE_bool(useFusion, true, "Whether to use Fusion Strategy");
 
 
 namespace SparsetoDense {
@@ -23,6 +23,7 @@ void DenseSlam::ProcessFrame(Input *input) {
      return;
   }
   
+  
   utils::Tic("Read input and compute depth");
   if(!input->ReadNextFrame()) {
      throw runtime_error("Could not read input from the data source.");
@@ -31,6 +32,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   currFrameTimeStamp = input->GetCurrentFrame_double();
 //   printf("%s%f", "DenseSlam26, currentFrame TimeStamp: \n", currFrameTimeStamp);
   
+  bool first_frame = (current_keyframe_no_ == 1);
   /// @brief 更新当前buf存储的color image和 depth 
   input->GetCvImages(&input_rgb_image_, &input_raw_depth_image_);
   utils::Toc();
@@ -51,7 +53,9 @@ void DenseSlam::ProcessFrame(Input *input) {
       orbSLAMInputDepth.at<float>(row,col) = ((float)input_raw_depth_image_n.at<int16_t>(row,col))/1000.0;
     }
   }
-    
+  
+//   std::cout << "denseslam 49: " << std::endl;
+  
 //   imshow("orbSLAMInputDepth: ", orbSLAMInputDepth);
 //   cv::waitKey(0);
   
@@ -70,13 +74,15 @@ void DenseSlam::ProcessFrame(Input *input) {
      orbslam_static_scene_trackMonular(input_rgb_image_n, currFrameTimeStamp);
   }
   
+//   std:: cout << "denseslam 68: "<<std::endl;
   { 
      unique_lock<mutex> lock(mMutexFrameDataBase);
      mframeDataBase[currFrameTimeStamp]= make_pair((input_rgb_image_n), (input_raw_depth_image_n));
   }
+  std::cout << "denseslam 76: "<<std::endl;
      current_frame_no_++;
   });  
-    
+  
   /*
   lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
   mTrackIntensity = GetOrbSlamTrackerGlobal()->getMatchInlier();
@@ -89,7 +95,6 @@ void DenseSlam::ProcessFrame(Input *input) {
   
   ///当threadhold大于mTrackIntensity的时候，就说明此时需要进行位姿的融合了
   if(!first_frame && FLAGS_useFusion && FLAGS_external_odo){
-      cout << "denseslam 94: "<<endl;
       utils::Tic("Fusion Pose of VO");
       
       {
@@ -100,16 +105,20 @@ void DenseSlam::ProcessFrame(Input *input) {
 	*orbslam_tracking_gl_n() = false;
       }
       
-      cout << "denseslam 104: "<<endl;
+//       cout << "denseslam 99: "<<endl;
       std::this_thread::sleep_for(std::chrono::milliseconds(25));//至于休眠多长时间还需要测试
       currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
-       cout << "denseslam 106: "<<endl;
+//       cout << "denseslam 106: "<<endl;
       cv::Mat tempPose = orbslam_static_scene_->GetPose();
-       cout << "denseslam 108 :" << endl;
-      if(!is_identity_matrix(tempPose)){
-         static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(tempPose));
+//       cout << "denseslam 108 :" << endl;
+      if(is_identity_matrix(tempPose)){
+	 conLostFrameNum ++;
       }
-//       cout << "tempPose: " << ORB_SLAM2::drivers::MatToEigen(tempPose.inv()) << endl;
+      else{
+	 static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(tempPose));
+	 conLostFrameNum = 0;
+      }
+//    cout << "tempPose: " << ORB_SLAM2::drivers::MatToEigen(tempPose.inv()) << endl;
 
       //主要为跟踪做准备
       static_scene_->PrepareNextStepLocalMap(currentLocalMap);
@@ -126,7 +135,6 @@ void DenseSlam::ProcessFrame(Input *input) {
       Eigen::Matrix4d tempSlamPose;
       tempSlamPose = MatrixFloatToDouble(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
       Eigen::Matrix4d tempfusionPose;
-
       float ratio = 0.0;
       float ratioTemp = 0.0;
       int diff = 0.0;
@@ -146,67 +154,33 @@ void DenseSlam::ProcessFrame(Input *input) {
       orbslam_static_scene_->SetCurrFrameToWorldPose(ORB_SLAM2::drivers::EigenToMat(MatrixDoubleToFloat(tempfusionPose)));
       */
       cout << "DensSlam.cpp: 122:" << tempDensePose.inverse() << endl;
-      orbslam_static_scene_->SetTrackingPose(ORB_SLAM2::drivers::EigenToMat(MatrixDoubleToFloat(tempDensePose).inverse()));
+      if(usingICP){
+         orbslam_static_scene_->SetTrackingPose(ORB_SLAM2::drivers::EigenToMat(MatrixDoubleToFloat(tempDensePose).inverse()));
+      }
       {
 	unique_lock<mutex> locker1(mMutexCond1);
         *orbslam_tracking_gl()=true;
         orbslam_tracking_cond()->notify_one();
       }
+      if(conLostFrameNum > 5 && orbslam_static_scene_localBAKF()->empty()){
+	 FrameDensePoseBase[currFrameTimeStamp] = MatrixDoubleToFloat(tempDensePose);
+	 static_scene_->IntegrateLocalMap(currentLocalMap);
+	 usingICP = false;
+      }
       utils::Toc();
   }  
-  
-  
-  //当超过20帧还没初始化的时候，则构建新的地图，主要是为了做实验，实验数据集rgbd_dataset_freiburg3_structure_notexture_far和rgbd_dataset_freiburg3_structure_notexture_near
-  if(NoInitialNum > 20 && shouldCreateNewLocalMap){
-    cout << "DenseSlam 166:" << endl;
-    int currentLocalMapIdx = static_scene_->GetMapManager()->createNewLocalMap();
-    ITMLib::Objects::ITMPose tempPose;
-    Eigen::Matrix4f initPose;
-    initPose << 1.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-		0.0, 0.0, 1.0, 0.0,
-		0.0, 0.0, 0.0, 1.0;
-    //InvM指世界坐标系到相机的变换
-    tempPose.SetInvM(drivers::EigenToItm(initPose));
-    static_scene_->GetMapManager()->setEstimatedGlobalPose(currentLocalMapIdx, tempPose);
-    todoList.push_back(TodoListEntry(currentLocalMapIdx,
-				     lastKeyFrameTimeStamp,
-				     lastKeyFrameTimeStamp));
-    
-    shouldCreateNewLocalMap = false;
-    first_frame = false;
-    *orbslam_tracking_isDenseMapCreate() = true;
-  }
-  if(NoInitialNum > 21){
-     currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
-      //主要为跟踪做准备
-     static_scene_->PrepareNextStepLocalMap(currentLocalMap);
-      //更新当前的RGB及深度图
-      static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
-      //做跟踪
-     static_scene_->TrackLocalMap(currentLocalMap); 
-     Eigen::Matrix4f tempPose = static_scene_->GetLocalMapPose(currentLocalMap);
-     mframePoseBase.push_back(make_pair(currFrameTimeStamp, tempPose));
-     static_scene_->IntegrateLocalMap(currentLocalMap);
-     printf("%s%f", "currtimestamp: ", currFrameTimeStamp);
-     utils::Tic("Map decay");
-     Decay();
-     utils::Toc();
-  }
     
   ///从OrbSlam中的localMapping线程提取经过localBA后的当前帧
   if(orbslam_static_scene_localBAKF()->empty()){
-       NoInitialNum ++ ;
        return;
   }
-  
-  return;
   mcurrBAKeyframe = orbslam_static_scene_localBAKF()->front();
   orbslam_static_scene_localBAKF()->pop_front();
   if(mcurrBAKeyframe->isBad()){
      return;
   }
   double currBAKFTime = mcurrBAKeyframe->mTimeStamp;
+//   cout << "DenseSlam.cpp 175: currBAKFTime: " << currBAKFTime << endl;
   {
     unique_lock<mutex> lock(mMutexBAKF);
     std::map<double, std::pair<cv::Mat3b, cv::Mat1s>>::iterator iter;
@@ -234,11 +208,12 @@ void DenseSlam::ProcessFrame(Input *input) {
     
     *orbslam_tracking_gl()=true;
     orbslam_tracking_cond()->notify_one();
+//     orbslamVO.get();
+//     *orbslam_tracking_gl() = false;
     
-    shouldCreateNewLocalMap = false;
+//     shouldCreateNewLocalMap = false;
     first_frame = false;
   }
-  
   
   orbslamVO.get();
   
@@ -266,7 +241,7 @@ void DenseSlam::ProcessFrame(Input *input) {
       }
     else if(input->GetSensorType() == Input::STEREO && FLAGS_useSparseFlowVO){
       ///使用双目光流计算出来的里程计
-      future<void> ssf_and_vo = async(launch::async, [this, &input] {
+      future<void> ssf_and_vo = async(launch::async, [this, &input, &first_frame] {
       utils::Tic("Sparse Scene Flow");
 
       // Whether to use input from the original cameras. Unavailable with the tracking dataset.
@@ -417,7 +392,6 @@ std::string DenseSlam::EnsureDumpFolderExists(const string &dataset_name) const 
 
   return target_folder;
 }
-}
 
 Eigen::Matrix< double, int(3), int(3) > SparsetoDense::DenseSlam::toMatrix3d(const cv::Mat& cvMat3)
 {
@@ -444,7 +418,7 @@ vector< float > SparsetoDense::DenseSlam::toQuaternion(const cv::Mat& M)
     return v;
 }
 
-void SparsetoDense::DenseSlam::SaveKeyFrameTrajectoryTUMEX(const string& filename)
+void SparsetoDense::DenseSlam::SaveKeyFrameTrajectoryTUMEX(const string& filename, map<double, cv::Mat> dataBase)
 {
     cout << endl << "Saving keyframe trajectory to " << filename << " ..." << endl;
 
@@ -455,22 +429,21 @@ void SparsetoDense::DenseSlam::SaveKeyFrameTrajectoryTUMEX(const string& filenam
     f.open(filename.c_str());
     f << fixed;
 
-    for(size_t i=0; i<mframePoseBase.size(); i++)
-    {
-        double timeStamp = mframePoseBase[i].first;
-	Eigen::Matrix4f tempPose = mframePoseBase[i].second;
+    for(map<double, cv::Mat>::iterator iter = dataBase.begin(); iter != dataBase.end(); iter++){
+        double timeStamp = iter->first;
+	cv::Mat tempPose = iter->second;
 	cv::Mat R = cv::Mat::eye(3,3,CV_32F);
 	for(int row=0;row<R.rows;row++){
           for(int col=0;col<R.cols;col++){
-             R.at<float>(row,col) = tempPose(row,col);
-          }
-         }
-	
+	    R.at<float>(row,col)=tempPose.at<float>(row,col);
+	  }
+	}
         vector<float> q = toQuaternion(R);
-        f << setprecision(6) << timeStamp << setprecision(7) << " " << tempPose(0,3) << " " << tempPose(1,3) << " " << tempPose(2,3)
+        f << setprecision(6) << timeStamp << setprecision(7) << " " << tempPose.at<float>(0,3) << " " << tempPose.at<float>(1,3) << " " << tempPose.at<float>(2,3)
           << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
     }
 
     f.close();
     cout << endl << "trajectory saved!" << endl;
+}
 }

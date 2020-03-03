@@ -554,8 +554,15 @@ void PangolinGui::CreatePangolinDisplays(){
 void PangolinGui::ProcessFrame(){
     cout << endl << "[Starting frame " << dense_slam_->GetCurrentFrameNo() + 1 << "]" << endl;
     if (! dense_slam_input_->HasMoreImages()){
-//       dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
-      dense_slam_->SaveKeyFrameTrajectoryTUMEX("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
+      map<double, cv::Mat> orbslamKeyframe = dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
+      if(!dense_slam_->FrameDensePoseBase.empty()){
+	for(map<double, Eigen::Matrix4f>::iterator iter = dense_slam_->FrameDensePoseBase.begin(); iter != dense_slam_->FrameDensePoseBase.end(); iter++){
+	  orbslamKeyframe[iter->first] = ORB_SLAM2::drivers::EigenToMat(iter->second);
+	}
+      }
+      cout <<"Denseslam 563: " << endl;
+      dense_slam_->SaveKeyFrameTrajectoryTUMEX("/home/hansry/DenseSLAM-Global-Consistency-h/data/result_com.txt", orbslamKeyframe);
+//       dense_slam_->SaveKeyFrameTrajectoryTUMEX("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
       cout << "No more images, Bye!" << endl;
       getchar();
     }

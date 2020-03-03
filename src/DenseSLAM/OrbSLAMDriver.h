@@ -121,10 +121,10 @@ public:
       this->GetTracker()->mCurrentFrame.SetPose(Tcw);
     }
     
-    void SaveTUMTrajectory(const string& filename){
-      this->SaveKeyFrameTrajectoryTUM(filename);
+    map<double, cv::Mat> SaveTUMTrajectory(const string& filename){
+      return this->SaveKeyFrameTrajectoryTUM(filename);
     }
-    
+
 private:
     Eigen::Matrix4f last_egomotion_;
     string strSettingsFile_;    
