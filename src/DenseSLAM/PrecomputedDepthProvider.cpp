@@ -22,6 +22,9 @@ void PrecomputedDepthProvider::DisparityOrDepthMapFromStereo(const cv::Mat&,
      else if(this->input_->GetDatasetType() == Input::TUM){
         ReadPrecomputed(this->input_->GetCurrentFrame_str().second, out_disparity);
      }
+     else if(this->input_->GetDatasetType() == Input::ICLNUIM){
+        ReadPrecomputed(this->input_->GetCurrentFrame_int(), out_disparity);
+    }
      else{
        runtime_error("Currently unspported datasetType !");
     }
@@ -54,7 +57,7 @@ void PrecomputedDepthProvider::ReadPrecomputed(T frame_idx, cv::Mat &out) const 
        }
      }
   }
-  else if(this->input_->GetDatasetType() == Input::TUM){
+  else if(this->input_->GetDatasetType() == Input::TUM || this->input_->GetDatasetType() == Input::ICLNUIM){
       out = cv::imread(depth_fpath, -1); //Remeber to add "-1"
       cout << "out_type: " << out.type() << out.size() << endl;
   }
@@ -79,7 +82,7 @@ void PrecomputedDepthProvider::ReadPrecomputed(T frame_idx, cv::Mat &out) const 
     for(int i = 0; i < out.rows; ++i) {
       for(int j = 0; j < out.cols; ++j) {
         if(out.type() == CV_32FC1) {
-	  if(this->input_->GetDatasetType() == Input::TUM){
+	  if(this->input_->GetDatasetType() == Input::TUM || this->input_->GetDatasetType() == Input::ICLNUIM){
             out.at<float>(i, j) = out.at<float>(i, j) / 5.0;
 	  }
           float depth = out.at<float>(i, j);
@@ -89,8 +92,9 @@ void PrecomputedDepthProvider::ReadPrecomputed(T frame_idx, cv::Mat &out) const 
         }
         else {
 	  ///由于对于TUM-RGBD数据集，其存储在图片上是以 realValue(m)*5000(5*mm)存储的，这里我们的out是16位存储为mm，因此需要除以5
-	  if(this->input_->GetDatasetType() == Input::TUM){
+	  if(this->input_->GetDatasetType() == Input::TUM || this->input_->GetDatasetType() == Input::ICLNUIM){
             out.at<int16_t>(i, j) = static_cast<int16_t>(((float)out.at<int16_t>(i, j))/5.0);
+// 	    cout << "PrecomputedDepthProvider: depth : " << out.at<int16_t>(i, j) << endl;
 	  }
           int16_t depth = out.at<int16_t>(i, j);
 	  if (depth > max_depth_mm_s) {

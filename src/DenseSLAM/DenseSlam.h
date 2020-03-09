@@ -12,6 +12,7 @@
 #include "Input.h"
 #include "OrbSLAMDriver.h"
 #include <map>
+#include <string>
 #include <cmath>
 
 DECLARE_bool(dynamic_weights);
@@ -129,7 +130,7 @@ public:
     return current_frame_no_;
   }
 
-  void SaveStaticMap(const std::string &dataset_name, const std::string &depth_name) const;
+  void SaveStaticMap(const std::string &dataset_name, const std::string &depth_name, const ITMLib::Engine::ITMLocalMap* currentLocalMap, int localMap_no) const;
 
   void SaveDynamicObject(const std::string &dataset_name, const std::string &depth_name, int object_id) const;
 
@@ -308,6 +309,13 @@ public:
     return 0;
   }
   
+  size_t GetCurrMapAllocatedMapMemoryBytes() const {
+    if(currentLocalMap != NULL){
+       return static_scene_->GetCurrMapAllocateMemoryBytes(currentLocalMap);
+    }
+    return 0;
+  }
+  
   int ExtractKeyPointNum(){
     string fPath = orbslam_static_scene_->getOrbParamFile();
     cv::FileStorage fSetting(fPath, cv::FileStorage::READ);
@@ -347,22 +355,23 @@ public:
     return PDThreshold_;
   }
   
-  map<double, cv::Mat> SaveTUMTrajectory(const string& filename){
-    return orbslam_static_scene_->SaveTUMTrajectory(filename);
+  void SaveTUMTrajectory(const string& filename){
+    orbslam_static_scene_->SaveTUMTrajectory(filename);
   }
   
   bool is_identity_matrix(cv::Mat matrix);
   
   bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
   
-  void SaveKeyFrameTrajectoryTUMEX(const string &filename, map<double, cv::Mat> dataBase);
-  std::vector<float> toQuaternion(const cv::Mat &M);
-  Eigen::Matrix<double,3,3> toMatrix3d(const cv::Mat &cvMat3);
-  
   int createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose);
   map<double, std::pair<cv::Mat3b, cv::Mat1s>> mframeDataBase;
   
-  map<double, Eigen::Matrix4f> FrameDensePoseBase;
+  std::vector<TodoListEntry> todoList;
+  
+  InfiniTamDriver* GetStaticScene() {
+    return static_scene_;
+  }
+  
   SUPPORT_EIGEN_FIELDS;
 
 private:
@@ -371,11 +380,8 @@ private:
   SparseSFProvider *sparse_sf_provider_;
 //   dynslam::eval::Evaluation *evaluation_;
   
-  std::vector<TodoListEntry> todoList;
   
   double currFrameTimeStamp;
-  int conLostFrameNum = 0;
-  bool usingICP = true;
 
   ITMUChar4Image *out_image_;
   ITMFloatImage *out_image_float_;
@@ -428,11 +434,7 @@ private:
   std::queue<pair<ORB_SLAM2::KeyFrame, cv::Mat>> mkeyframeForNewLocalMap;
   std::mutex mMutexKeyframeQueue;
  
- // std::vector<Eigen::Matrix4f, Eigen::aligned_allocator<Eigen::Matrix4f>> pose_history_;
   std::vector<Eigen::Matrix4f> pose_history_;
-  /// \brief Matrix for projecting 3D homogeneous coordinates in the left gray camera's coordinate
-  ///        frame to 2D homogeneous coordinates in the left color camera's coordinate frame
-  ///        (expressed in pixels).
   /// \brief 归一化平面到像素平面？
   const Eigen::Matrix34f projection_left_rgb_;
   const Eigen::Matrix34f projection_right_rgb_;

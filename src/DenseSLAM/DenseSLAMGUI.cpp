@@ -34,7 +34,7 @@ void PangolinGui::DrawPose(long int current_time_ms){
             DrawPoseFrustum(phist[i], color_blue, kMaxFrustumScale, frustum_root_cube_scale);
         }
     }
-    else if(dense_slam_input_->GetDatasetType() == Input::TUM){
+    else if(dense_slam_input_->GetDatasetType() == Input::TUM || dense_slam_input_->GetDatasetType() == Input::ICLNUIM){
       kMaxFrustumScale = 0.3;
       for (int i = static_cast<int>(phist.size())-5; i < static_cast<int>(phist.size()) - 1; ++i) {
             DrawPoseFrustum(phist[i], color_blue, kMaxFrustumScale, frustum_root_cube_scale);
@@ -113,7 +113,7 @@ void PangolinGui::Run(){
              pangolin::OpenGlMatrix::Translate(-0.5, 1.0, 15.0) *
              pm;
 	}
-	else if(dense_slam_input_->GetDatasetType() == Input::TUM){
+	else if(dense_slam_input_->GetDatasetType() == Input::TUM || dense_slam_input_->GetDatasetType() == Input::ICLNUIM){
 	 pm =
             // Good for odo 05
             pangolin::OpenGlMatrix::RotateY(M_PI * 0.5 * 0.05f) *
@@ -171,7 +171,7 @@ void PangolinGui::Run(){
       if(dense_slam_->GetCurrentFrameNo()>=1){
 	glClearColor(0.0f,0.0f,0.0f,0.0f);
 	bool showGraph = true;
-	if(dense_slam_input_->GetDatasetType() == Input::TUM){
+	if(dense_slam_input_->GetDatasetType() == Input::TUM || dense_slam_input_->GetDatasetType() == Input::ICLNUIM){
 	    OrbSlamMapDrawer_->SetViewKeyframe(5);
 	    showGraph = false;
 	}
@@ -203,28 +203,28 @@ void PangolinGui::Run(){
       depth_view_.Activate();
       glColor3f(1.0,1.0,1.0);
       /// 可视化光线投影的深度图
-      if(paramGUI.viewRaycastDepth){
-          cv::Size2i tempRaycastDepthSize = dense_slam_input_->GetDepthSize();
-          cv::Mat1s *tempRaycastShort = new cv::Mat1s(tempRaycastDepthSize.height, tempRaycastDepthSize.width);
-	  Eigen::Matrix4f cam_raycast = dense_slam_->GetPose().inverse();
-	  pangolin::OpenGlMatrix pm_raycast(cam_raycast);
-          /// NOTE 光线投影回来的深度图
-          const float* tempRaycastDepth = dense_slam_ -> GetRaycastDepthPreview(pm_raycast, static_cast<PreviewType>(current_preview_depth_type), enable_compositing_dense);
-          if(tempRaycastDepth != nullptr ){
-	  SparsetoDense::FloatDepthmapToShort(tempRaycastDepth, *tempRaycastShort);
-	  if(tempRaycastDepth != nullptr){
-	      UploadCvTexture(*tempRaycastShort,*pane_texture_, false, GL_SHORT);
-	   }
-         }
-         delete tempRaycastShort;
-      }
-      else{
-	 if (dense_slam_->GetDepthPreview() != nullptr) {
-             UploadCvTexture(*(dense_slam_->GetDepthPreview()), *pane_texture_, false, GL_SHORT);
-         }
+      if (dense_slam_->GetDepthPreview() != nullptr) {
+           UploadCvTexture(*(dense_slam_->GetDepthPreview()), *pane_texture_, false, GL_SHORT);
       }
       pane_texture_->RenderToViewport(true);
-            
+      
+      raycast_depth_view_.Activate();
+      glColor3f(1.0,1.0,1.0);
+      cv::Size2i tempRaycastDepthSize = dense_slam_input_->GetDepthSize();
+      cv::Mat1s *tempRaycastShort = new cv::Mat1s(tempRaycastDepthSize.height, tempRaycastDepthSize.width);
+      Eigen::Matrix4f cam_raycast = dense_slam_->GetPose().inverse();
+      pangolin::OpenGlMatrix pm_raycast(cam_raycast);
+      /// NOTE 光线投影回来的深度图
+      const float* tempRaycastDepth = dense_slam_ -> GetRaycastDepthPreview(pm_raycast, static_cast<PreviewType>(current_preview_depth_type), enable_compositing_dense);
+      if(tempRaycastDepth != nullptr ){
+	SparsetoDense::FloatDepthmapToShort(tempRaycastDepth, *tempRaycastShort);
+	if(tempRaycastDepth != nullptr){
+	    UploadCvTexture(*tempRaycastShort,*pane_texture_, false, GL_SHORT);
+	 }
+      }
+      delete tempRaycastShort;
+      pane_texture_->RenderToViewport(true);
+      
       /// NOTE 以第一视角观察orbslam以及稠密地图的第一视角
       /*
       if(dense_slam_->GetCurrentFrameNo()>=1){
@@ -289,7 +289,6 @@ void PangolinGui::CreatePangolinDisplays(){
     
     // 3D Mouse handler requires depth testing to be enabled
     glEnable(GL_DEPTH_TEST);
-
     // Issue specific OpenGl we might need
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -314,7 +313,9 @@ void PangolinGui::CreatePangolinDisplays(){
       }
       else {
         dense_slam_->SaveStaticMap(dense_slam_input_->GetDatasetIdentifier(),
-                                 dense_slam_input_->GetDepthProvider()->GetName());
+                                  dense_slam_input_->GetDepthProvider()->GetName(),
+				  dense_slam_->GetCurrentLocalMap(),
+				  dense_slam_->GetNumLocalMap());
         cout << "Mesh generated OK. Writing asynchronously to the disk..." << endl;
         Toc();
       }
@@ -362,6 +363,9 @@ void PangolinGui::CreatePangolinDisplays(){
       }
     });
     
+    /***************************************************************************
+     * GUI Checkboxes
+     **************************************************************************/
     NumLocalMap = new pangolin::Var<string>("ui.Number of Submaps: ", "");
 //  NumActiveLocalMap = new pangolin::Var<string>("ui.Number of Active Submaps: ", "");
     
@@ -371,9 +375,6 @@ void PangolinGui::CreatePangolinDisplays(){
     CurrentLocalMapStartKeyframeNo = new pangolin::Var<string> ("ui.Curr LocalMap Start Keyframe No.", "");
     CurrentLocalMapEndKeyframeNo = new pangolin::Var<string> ("ui.Curr LocalMap End Keyframe No.", "");
 
-    /***************************************************************************
-     * GUI Checkboxes
-     **************************************************************************/
     autoplay_ = new pangolin::Var<bool>("ui.[A]utoplay", paramGUI.autoplay, true);
     pangolin::RegisterKeyPressCallback('a', [this]() {
       *(this->autoplay_) = ! *(this->autoplay_);
@@ -420,26 +421,13 @@ void PangolinGui::CreatePangolinDisplays(){
 	pangolin::ModelViewLookAtRDF(3.0, -2.5, 15,
 	                             3.0, -2.5, 50,
 			             0, 1, 0));
-   
-    /**
-    orb_Trajectory_pane_cam_ = new pangolin::OpenGlRenderState(
-       proj_,
-       pangolin::ModelViewLookAtRDF(0, -1.5, 15,
-	                             0, -1.5, 50,
-			             0, 1, 0));
-    
-    dense_map_pane_cam_ = new pangolin::OpenGlRenderState(
-      proj_,
-      pangolin::ModelViewLookAtRDF(0, -1.5, 15,
-	                             0, -1.5, 50,
-			             0, 1, 0));
-    **/
 
     float aspect_ratio = static_cast<float>(width_) / height_;//宽高比
     rgb_view_ = pangolin::Display("rgb").SetAspect(aspect_ratio);
     depth_view_ = pangolin::Display("depth").SetAspect(aspect_ratio);
-    float camera_translation_scale = 1.0f;
-    float camera_zoom_scale = 1.0f;
+    raycast_depth_view_ = pangolin::Display("raycast_depth").SetAspect(aspect_ratio);
+    float camera_translation_scale = 0.5f;
+    float camera_zoom_scale = 0.5f;
     
     // These objects remain under Pangolin's management, so they don't need to be deleted by the current class.
     // 构建的地图主要显示
@@ -454,54 +442,30 @@ void PangolinGui::CreatePangolinDisplays(){
     
     // 构建OrbSLAM地图的显示
     orbslam_view_ = &(pangolin::Display("orbslam"));
-    //orbslam_view_->SetHandler(new DSHandler3D(orb_pane_cam_));
-    //orbslam_view_->SetHandler(new pangolin::Handler3D(*orb_pane_cam_));
-    
     orbslam_view_->SetHandler(
     new DSHandler3D(orb_pane_cam_,
                     pangolin::AxisY,
                     camera_translation_scale,
                     camera_zoom_scale));
     
-    //用于显示OrbSLAM的位姿
-    /*
-    orb_trajectory_view_ = &(pangolin::Display("orbslam_trajectory"));
-    orb_trajectory_view_->SetHandler(
-      new DSHandler3D(orb_Trajectory_pane_cam_,
-	              pangolin::AxisY,
-		      camera_translation_scale,
-		      camera_zoom_scale));
-    dense_map_fpv_view_ = &(pangolin::Display("dense_map_fpv_view"));
-    dense_map_fpv_view_->SetHandler(
-       new DSHandler3D(orb_Trajectory_pane_cam_,
-	   pangolin::AxisY,
-           camera_translation_scale,
-           camera_zoom_scale));
-    */
     //主要的一些细节部分
     detail_views_ = &(pangolin::Display("detail"));
-    detail_views_raycast = &(pangolin::Display("detail_raycast"));
 
     // Add labels to our data logs (and automatically to our plots).
     data_log_memory.SetLabels({
                       "Free GPU Memory (100s of MiB)",
 		      "Total GPU Memory (100s of MiB)",
-                      "Static map memory usage (100s of MiB)",
+		      "Dense map allocated memory (100s of MiB)",
+                      "Dense map memory usage (10s of MiB)",
                      });
     
     // OpenGL 'view' of data such as the number of actively tracked instances over time.
     // tick指将横纵坐标分为多少份
     float tick_x = 30.0f;
     float tick_y_memory = 15.0f;
-    float tick_y_track =  250.0f;
+//     float tick_y_track =  250.0f;
     plotter_memory = new pangolin::Plotter(&data_log_memory, 0.0f, 200.0f, 0.0f, 25.0f, tick_x, tick_y_memory);
     plotter_memory->Track("$i");  // This enables automatic scrolling for the live plots.
-    
-    data_log_track.SetLabels({ "OrbSLAM tracking Intensity (the number of inliers)",
-                               "PD Threadhold",
-                            });
-    plotter_track = new pangolin::Plotter(&data_log_track, 0.0f, 200.0f, 0.0f, 500.0f, tick_x, tick_y_track);
-    plotter_track->Track("$i");
        
     //main_views:指的是融合后的地图
     //detail_views:指的是static_rgb、 static_depth、 segment_view_、object_view
@@ -514,9 +478,10 @@ void PangolinGui::CreatePangolinDisplays(){
          .AddDisplay(rgb_view_)
          .AddDisplay(depth_view_)
          .AddDisplay(*plotter_memory)
-         .AddDisplay(*plotter_track);
+	 .AddDisplay(raycast_depth_view_);
+//          .AddDisplay(*plotter_track);
     }
-    else if(dense_slam_input_->GetDatasetType() == Input::TUM){
+    else if(dense_slam_input_->GetDatasetType() == Input::TUM || dense_slam_input_->GetDatasetType() == Input::ICLNUIM){
       main_view_->SetBounds(pangolin::Attach::Pix(height_ *1.0), pangolin::Attach::Pix(height_ * 2.0), pangolin::Attach::Pix(kUiWidth+width_), pangolin::Attach::Pix(kUiWidth+2*width_));
       orbslam_view_->SetBounds(pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(height_ * 2.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
       detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+2*width_));
@@ -524,24 +489,13 @@ void PangolinGui::CreatePangolinDisplays(){
          .AddDisplay(rgb_view_)
          .AddDisplay(depth_view_)
          .AddDisplay(*plotter_memory)
-         .AddDisplay(*plotter_track);
+	 .AddDisplay(raycast_depth_view_);
+//          .AddDisplay(*plotter_track);
     }
     else{
       runtime_error("Currently not support dataset type !");
     }
     
-    /*
-    detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_*(1.0/3.0)));
-    detail_views_->SetLayout(pangolin::LayoutEqual)
-      .AddDisplay(rgb_view_)
-      .AddDisplay(depth_view_);
-    orb_trajectory_view_->SetBounds(pangolin::Attach::Pix(height_*0.32), pangolin::Attach::Pix(height_*1.0), 
-				      pangolin::Attach::Pix(kUiWidth+width_*(1.0/3.0)),
-				      pangolin::Attach::Pix(kUiWidth+width_*(2.0/3.0)));
-    dense_map_fpv_view_->SetBounds(pangolin::Attach::Pix(height_*0.32), pangolin::Attach::Pix(height_*1.0), 
-				      pangolin::Attach::Pix(kUiWidth+width_*(2.0/3.0)),
-				      pangolin::Attach::Pix(kUiWidth+width_));
-    */
     // Internally, InfiniTAM stores these as RGBA, but we discard the alpha when we upload the
     // textures for visualization (hence the 'GL_RGB' specification).
     this->pane_texture_ = new pangolin::GlTexture(width_, height_, GL_RGB, false, 0, GL_RGB,GL_UNSIGNED_BYTE);
@@ -554,16 +508,17 @@ void PangolinGui::CreatePangolinDisplays(){
 void PangolinGui::ProcessFrame(){
     cout << endl << "[Starting frame " << dense_slam_->GetCurrentFrameNo() + 1 << "]" << endl;
     if (! dense_slam_input_->HasMoreImages()){
-      map<double, cv::Mat> orbslamKeyframe = dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
-      if(!dense_slam_->FrameDensePoseBase.empty()){
-	for(map<double, Eigen::Matrix4f>::iterator iter = dense_slam_->FrameDensePoseBase.begin(); iter != dense_slam_->FrameDensePoseBase.end(); iter++){
-	  orbslamKeyframe[iter->first] = ORB_SLAM2::drivers::EigenToMat(iter->second);
+      
+      dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
+      cout << "No more images, Bye!" << endl;
+      
+      if(!dense_slam_->todoList.empty()){
+	for(int mapNO = 0; mapNO < dense_slam_->todoList.size(); mapNO++){
+	  int mapNum = dense_slam_->todoList[mapNO].dataId;
+	  ITMLib::Engine::ITMLocalMap* currLocalMap = dense_slam_->GetStaticScene()->GetMapManager()->getLocalMap(mapNum);
+	  dense_slam_->SaveStaticMap(dense_slam_input_->GetDatasetIdentifier(), "depth", currLocalMap, mapNum);
 	}
       }
-      cout <<"Denseslam 563: " << endl;
-      dense_slam_->SaveKeyFrameTrajectoryTUMEX("/home/hansry/DenseSLAM-Global-Consistency-h/data/result_com.txt", orbslamKeyframe);
-//       dense_slam_->SaveKeyFrameTrajectoryTUMEX("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
-      cout << "No more images, Bye!" << endl;
       getchar();
     }
     if (! dense_slam_input_->HasMoreImages() && paramGUI.close_on_complete) {
@@ -586,13 +541,16 @@ void PangolinGui::ProcessFrame(){
     double total_gpu_gb = static_cast<float>(total_gpu_memory_bytes) * kBytesToGb;  
     
     size_t currLocalMapUsedMemory = dense_slam_->GetStaticMapMemoryBytes();
-    double curr_LocalMap_used_gpu_gb = static_cast<float>(currLocalMapUsedMemory) * kBytesToGb;  
+    size_t currLocalMapAlloMemory = dense_slam_->GetCurrMapAllocatedMapMemoryBytes();
+    double curr_LocalMap_used_gpu_gb = static_cast<float>(currLocalMapUsedMemory) * kBytesToGb;
+    double curr_LocalMap_allo_gpu_gb = static_cast<float>(currLocalMapAlloMemory) * kBytesToGb;
 
-    //由于计算出来的free_gpu_gb等均为以G为单位的，因此乘上10转化为以（100MB的显示）
+    //由于计算出来的free_gpu_gb等均为以G为单位的，因此乘上10.24转化为以（100MB的显示）
     data_log_memory.Log(
       static_cast<float>(free_gpu_gb) * 10.24f, 
       static_cast<float>(total_gpu_gb) * 10.24f,
-      static_cast<float>(curr_LocalMap_used_gpu_gb)*10.24f
+      static_cast<float>(curr_LocalMap_allo_gpu_gb) * 10.24f, 
+      static_cast<float>(curr_LocalMap_used_gpu_gb) * 102.4f
     );
     
     int orbslamTrackIntensity = dense_slam_->mTrackIntensity;

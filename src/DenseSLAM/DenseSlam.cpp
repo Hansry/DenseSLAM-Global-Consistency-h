@@ -43,10 +43,8 @@ void DenseSlam::ProcessFrame(Input *input) {
   input_rgb_image_n = (*input_rgb_image_).clone();
   input_raw_depth_image_n = (*input_raw_depth_image_).clone();
   
-  future<void> orbslamVO = async(launch::async, [this, &input]{
-//   std::cout << "denseslam 40: "<< std::endl;
   cv::Mat orbSLAMInputDepth(input_raw_depth_image_n.rows, input_raw_depth_image_n.cols, CV_32FC1);
-  cv::Mat orbSLAMInputRGB(input_rgb_image_n.rows, input_rgb_image_n.cols, CV_32FC3);
+  std::cout << "denseslam 47: " << std::endl;
 
   for(int row =0; row<input_rgb_image_n.rows; row++){
     for(int col =0; col<input_rgb_image_n.cols; col++){
@@ -54,8 +52,53 @@ void DenseSlam::ProcessFrame(Input *input) {
     }
   }
   
-//   std::cout << "denseslam 49: " << std::endl;
+  if(!first_frame && out_image_float_->GetData(MEMORYDEVICE_CPU)!=nullptr){
+    cv::Mat raycastDepth(input_raw_depth_image_n.rows, input_raw_depth_image_n.cols, CV_32FC1);
+    for(int row=0; row<input_rgb_image_n.rows; row++){
+      for(int col=0; col<input_rgb_image_n.cols; col++){
+	raycastDepth.at<float>(row,col) = static_cast<float>(out_image_float_->GetData(MEMORYDEVICE_CPU)[row * input_rgb_image_n.cols + col]);
+      }
+    }
+    
+    unique_lock<mutex> lock(mMutexCond);
+    *(orbslam_static_scene_->GetTrackinRaycastDepth()) = raycastDepth.clone();
+    *(orbslam_static_scene_->GetTrackingDepth()) = orbSLAMInputDepth.clone();
+  }
   
+//   std::cout << "denseslam 55: " << std::endl;
+//   float inv_fx = 1.0/projection_left_rgb_(0,2);
+//   float inv_fy = 1.0/projection_left_rgb_(1,2);
+//   for(int row=0; row<input_rgb_image_n.rows; row++){
+//     for(int col=0; col<input_rgb_image_n.cols; col++){
+//       cv::Point3f depth;
+//       cv::Mat raycastDepth(3,1,CV_32F);
+//       if(!first_frame && !orbSLAMInputDepth.empty() && out_image_float_->GetData(MEMORYDEVICE_CPU)!= nullptr){
+//          depth.z = orbSLAMInputDepth.at<float>(row, col);
+// 	 raycastDepth.at<float>(0,2) = static_cast<float>(out_image_float_->GetData(MEMORYDEVICE_CPU)[row * input_rgb_image_n.cols + col]);
+// 	 if(depth.z < 0.005 || raycastDepth.at<float>(0,2) < 0.005) {
+// 	    continue;
+// 	 }
+//          depth.x = depth.z * (row-projection_left_rgb_(0,0))*inv_fx;
+//          depth.y = depth.z * (col-projection_left_rgb_(1,1))*inv_fy;
+//          orbslam_static_scene_->GetTrackingDepth()->push_back(depth);
+// 	 
+// // 	 cv::Mat tempPose = orbslam_static_scene_->GetPose(); // Twc
+// // 	 raycastDepth.at<float>(0,0) = raycastDepth.at<float>(0,2) * (row-projection_left_rgb_(0,0))*inv_fx;
+// // 	 raycastDepth.at<float>(0,1) = raycastDepth.at<float>(0,2) * (col-projection_left_rgb_(1,1))*inv_fy;
+// 	 cv::Mat tempPointCloud(3,1,CV_32F);
+// // 	 tempPointCloud = tempPose.rowRange(0,3).colRange(0,3) * raycastDepth + tempPose.rowRange(0,3).col(3);
+// // 	 
+// // 	 cv::Point3f raycast_point_cloud;
+// // 	 raycast_point_cloud.x = tempPointCloud.at<float>(0,0);
+// // 	 raycast_point_cloud.y = tempPointCloud.at<float>(0,1);
+// // 	 raycast_point_cloud.z = tempPointCloud.at<float>(0,2);
+// // 	 orbslam_static_scene_->GetTrackinRaycastDepth()->push_back(raycast_point_cloud);
+//       }
+//     }
+//   }
+  
+  future<void> orbslamVO = async(launch::async, [this, &input, &orbSLAMInputDepth]{
+    
 //   imshow("orbSLAMInputDepth: ", orbSLAMInputDepth);
 //   cv::waitKey(0);
   
@@ -83,92 +126,91 @@ void DenseSlam::ProcessFrame(Input *input) {
      current_frame_no_++;
   });  
   
-  /*
-  lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
-  mTrackIntensity = GetOrbSlamTrackerGlobal()->getMatchInlier();
   
-  //在这里实现PD控制器的实现，以及特征点的设置
-  PDThreshold_ = PDController(mTrackIntensity, mPreTrackIntensity);
-  mPreDiff = abs(mTrackIntensity-mPreTrackIntensity);
-  mPreTrackIntensity = mTrackIntensity;
-  */
+//   lastKeyFrameTimeStamp = GetOrbSlamTrackerGlobal()->mpLastKeyFrameTimeStamp();
+//   mTrackIntensity = GetOrbSlamTrackerGlobal()->getMatchInlier();
+//   
+//   //在这里实现PD控制器的实现，以及特征点的设置
+//   PDThreshold_ = PDController(mTrackIntensity, mPreTrackIntensity);
+//   mPreDiff = abs(mTrackIntensity-mPreTrackIntensity);
+//   mPreTrackIntensity = mTrackIntensity;
+  
   
   ///当threadhold大于mTrackIntensity的时候，就说明此时需要进行位姿的融合了
-  if(!first_frame && FLAGS_useFusion && FLAGS_external_odo){
-      utils::Tic("Fusion Pose of VO");
-      
-      {
-	unique_lock<mutex> locker(mMutexCond);
-	while(!(*orbslam_tracking_gl_n())){
-	  orbslam_tracking_cond_n()->wait(locker);
-	}
-	*orbslam_tracking_gl_n() = false;
-      }
-      
-//       cout << "denseslam 99: "<<endl;
-      std::this_thread::sleep_for(std::chrono::milliseconds(25));//至于休眠多长时间还需要测试
-      currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
-//       cout << "denseslam 106: "<<endl;
-      cv::Mat tempPose = orbslam_static_scene_->GetPose();
-//       cout << "denseslam 108 :" << endl;
-      if(is_identity_matrix(tempPose)){
-	 conLostFrameNum ++;
-      }
-      else{
-	 static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(tempPose));
-	 conLostFrameNum = 0;
-      }
-//    cout << "tempPose: " << ORB_SLAM2::drivers::MatToEigen(tempPose.inv()) << endl;
-
-      //主要为跟踪做准备
-      static_scene_->PrepareNextStepLocalMap(currentLocalMap);
-      //更新当前的RGB及深度图
-      static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
-      //做跟踪
-      static_scene_->TrackLocalMap(currentLocalMap);
-      //由raycast得到的深度图与当前深度图做ICP跟踪得到的位姿Tw->c
-      Eigen::Matrix4d tempDensePose;
-      tempDensePose = MatrixFloatToDouble(static_scene_->GetLocalMapPose(currentLocalMap));
-      /*
-      //由orbSLAM2计算出来的位姿Tw->c
-      orbSLAM2_Pose = orbslam_static_scene_->GetPose();
-      Eigen::Matrix4d tempSlamPose;
-      tempSlamPose = MatrixFloatToDouble(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
-      Eigen::Matrix4d tempfusionPose;
-      float ratio = 0.0;
-      float ratioTemp = 0.0;
-      int diff = 0.0;
-      if(PDThreshold_ > mTrackIntensity){
-	 diff = PDThreshold_ - mTrackIntensity;
-	 ratioTemp = (float)diff/(float)PDThreshold_;
-	 ratio = ratioTemp>0.5?ratioTemp:(1-ratioTemp);
-      }
-      else{
-	 diff = mTrackIntensity - PDThreshold_;
-	 ratioTemp = (float)diff/(float)mTrackIntensity;
-	 ratio = ratioTemp<0.5?ratioTemp:(1-ratioTemp);
-      }
-      Eigen::Matrix4d poseDiff = tempDensePose * tempSlamPose.inverse();
-      Eigen::MatrixPower<Eigen::Matrix4d> Apow(poseDiff);
-      tempfusionPose = Apow(ratio)*tempSlamPose;
-      orbslam_static_scene_->SetCurrFrameToWorldPose(ORB_SLAM2::drivers::EigenToMat(MatrixDoubleToFloat(tempfusionPose)));
-      */
-      cout << "DensSlam.cpp: 122:" << tempDensePose.inverse() << endl;
-      if(usingICP){
-         orbslam_static_scene_->SetTrackingPose(ORB_SLAM2::drivers::EigenToMat(MatrixDoubleToFloat(tempDensePose).inverse()));
-      }
-      {
-	unique_lock<mutex> locker1(mMutexCond1);
-        *orbslam_tracking_gl()=true;
-        orbslam_tracking_cond()->notify_one();
-      }
-      if(conLostFrameNum > 5 && orbslam_static_scene_localBAKF()->empty()){
-	 FrameDensePoseBase[currFrameTimeStamp] = MatrixDoubleToFloat(tempDensePose);
-	 static_scene_->IntegrateLocalMap(currentLocalMap);
-	 usingICP = false;
-      }
-      utils::Toc();
-  }  
+//   if(!first_frame && FLAGS_useFusion && FLAGS_external_odo){
+//       utils::Tic("Fusion Pose of VO");
+//       
+//       {
+// 	unique_lock<mutex> locker(mMutexCond);
+// 	while(!(*orbslam_tracking_gl_n())){
+// 	  orbslam_tracking_cond_n()->wait(locker);
+// 	}
+// 	*orbslam_tracking_gl_n() = false;
+//       }
+//       
+// //       cout << "denseslam 99: "<<endl;
+//       std::this_thread::sleep_for(std::chrono::milliseconds(25));//至于休眠多长时间还需要测试
+//       currentLocalMap = static_scene_->GetMapManager()->getLocalMap(todoList.back().dataId);
+// //       cout << "denseslam 106: "<<endl;
+//       cv::Mat tempPose = orbslam_static_scene_->GetPose();
+// //       cout << "denseslam 108 :" << endl;
+//       if(!is_identity_matrix(tempPose)){
+//          static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(tempPose));
+//       }
+// //       cout << "tempPose: " << ORB_SLAM2::drivers::MatToEigen(tempPose.inv()) << endl;
+//       
+//       //主要为跟踪做准备
+//       static_scene_->PrepareNextStepLocalMap(currentLocalMap);
+//       //更新当前的RGB及深度图
+//       static_scene_->UpdateView(*input_rgb_image_, *input_raw_depth_image_);
+//       //做跟踪
+//       static_scene_->TrackLocalMap(currentLocalMap);
+//       //由raycast得到的深度图与当前深度图做ICP跟踪得到的位姿Tw->c
+//       Eigen::Matrix4d tempDensePose;
+//       tempDensePose = MatrixFloatToDouble(static_scene_->GetLocalMapPose(currentLocalMap));
+//       /*
+//       cout << "tempDensePose 129: " << tempDensePose << endl;
+//       //由orbSLAM2计算出来的位姿Tw->c
+//       orbSLAM2_Pose = orbslam_static_scene_->GetPose();
+//       Eigen::Matrix4d tempSlamPose;
+//       tempSlamPose = MatrixFloatToDouble(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
+//       Eigen::Matrix4d tempfusionPose;
+// 
+//       float ratio = 0.0;
+//       float ratioTemp = 0.0;
+//       int diff = 0.0;
+//       if(PDThreshold_ > mTrackIntensity){
+// 	 diff = PDThreshold_ - mTrackIntensity;
+// 	 ratioTemp = (float)diff/(float)PDThreshold_;
+// 	 ratio = ratioTemp>0.5?ratioTemp:(1-ratioTemp);
+//       }
+//       else{
+// 	 diff = mTrackIntensity - PDThreshold_;
+// 	 ratioTemp = (float)diff/(float)mTrackIntensity;
+// 	 ratio = ratioTemp<0.5?ratioTemp:(1-ratioTemp);
+//       }
+//       cout << "DenseSlam 149: ratio"<< ratio << endl;
+//       Eigen::Matrix4d poseDiff = tempDensePose * tempSlamPose.inverse();
+//       Eigen::MatrixPower<Eigen::Matrix4d> Apow(poseDiff);
+//       tempfusionPose = Apow(ratio)*tempSlamPose;
+//       */
+//       
+//       cout << "DensSlam.cpp: 122:" << tempDensePose.inverse() << endl;
+// //       orbslam_static_scene_->SetTrackingPose(ORB_SLAM2::drivers::EigenToMat(MatrixDoubleToFloat(tempDensePose).inverse()));
+//       {
+// 	unique_lock<mutex> locker1(mMutexCond1);
+//         *orbslam_tracking_gl()=true;
+//         orbslam_tracking_cond()->notify_one();
+//       }
+//       utils::Toc();
+// //       orbslamVO.get();
+// //       *orbslam_tracking_gl()=false;
+//   }  
+  
+//   cv::Mat tempPose = orbslam_static_scene_->GetPose();
+//   if(!is_identity_matrix(tempPose) && currentLocalMap != NULL){
+//      static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(tempPose));
+//   }
     
   ///从OrbSlam中的localMapping线程提取经过localBA后的当前帧
   if(orbslam_static_scene_localBAKF()->empty()){
@@ -231,6 +273,10 @@ void DenseSlam::ProcessFrame(Input *input) {
       /// 由于调用的是LocalBA后的位姿，因此可以不需要是否跟踪成功
       if(!orbSLAM2_Pose.empty()){
 	    static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
+	    {
+	      unique_lock<mutex> lock(mMutexCond1);
+	      (*orbslam_static_scene_->GetPreKeyframePose()) = orbSLAM2_Pose.clone();
+	    }
 	    Eigen::Matrix4f currLocalMapPose = drivers::ItmToEigen(currentLocalMap->estimatedGlobalPose.GetM());
 	    if(shouldClearPoseHistory){
 	      pose_history_.clear();
@@ -372,78 +418,21 @@ int DenseSlam::createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose){
     return newIdx;
 }
 
-void DenseSlam::SaveStaticMap(const std::string &dataset_name, const std::string &depth_name) const {
+void DenseSlam::SaveStaticMap(const std::string &dataset_name, const std::string &depth_name, const ITMLib::Engine::ITMLocalMap* currentLocalMap, int localMap_no) const {
   string target_folder = EnsureDumpFolderExists(dataset_name);
-  string map_fpath = utils::Format("%s/static-%s-mesh-%06d-frames.obj",
-                                   target_folder.c_str(),
-                                   depth_name.c_str(),
-                                   current_frame_no_);
+  string map_fpath = target_folder + "/" + "mesh-" + depth_name + "-" + std::to_string(localMap_no) + "-frames.obj";
   cout << "Saving full static map to: " << map_fpath << endl;
-  static_scene_->SaveSceneToMesh(map_fpath.c_str());
+  static_scene_->SaveCurrSceneToMesh(map_fpath.c_str(), currentLocalMap->scene);
 }
 
 std::string DenseSlam::EnsureDumpFolderExists(const string &dataset_name) const {
-  // TODO-LOW(andrei): Make this more cross-platform and more secure.
   string today_folder = utils::GetDate();
-  string target_folder = "mesh_out/" + dataset_name + "/" + today_folder;
-  if(system(utils::Format("mkdir -p '%s'", target_folder.c_str()).c_str())) {
+  string target_folder = "../mesh_out/" + dataset_name + "/" + today_folder;
+  string mkdir_folder = "mkdir -p " + target_folder;
+  if(system(mkdir_folder.c_str())) {
     throw runtime_error(utils::Format("Could not create directory: %s", target_folder.c_str()));
   }
 
   return target_folder;
-}
-
-Eigen::Matrix< double, int(3), int(3) > SparsetoDense::DenseSlam::toMatrix3d(const cv::Mat& cvMat3)
-{
-    Eigen::Matrix<double,3,3> M;
-
-    M << cvMat3.at<float>(0,0), cvMat3.at<float>(0,1), cvMat3.at<float>(0,2),
-         cvMat3.at<float>(1,0), cvMat3.at<float>(1,1), cvMat3.at<float>(1,2),
-         cvMat3.at<float>(2,0), cvMat3.at<float>(2,1), cvMat3.at<float>(2,2);
-
-    return M;
-}
-
-vector< float > SparsetoDense::DenseSlam::toQuaternion(const cv::Mat& M)
-{
-    Eigen::Matrix<double,3,3> eigMat = toMatrix3d(M);
-    Eigen::Quaterniond q(eigMat);
-
-    std::vector<float> v(4);
-    v[0] = q.x();
-    v[1] = q.y();
-    v[2] = q.z();
-    v[3] = q.w();
-
-    return v;
-}
-
-void SparsetoDense::DenseSlam::SaveKeyFrameTrajectoryTUMEX(const string& filename, map<double, cv::Mat> dataBase)
-{
-    cout << endl << "Saving keyframe trajectory to " << filename << " ..." << endl;
-
-    // Transform all keyframes so that the first keyframe is at the origin.
-    // After a loop closure the first keyframe might not be at the origin.
-    //cv::Mat Two = vpKFs[0]->GetPoseInverse();
-    ofstream f;
-    f.open(filename.c_str());
-    f << fixed;
-
-    for(map<double, cv::Mat>::iterator iter = dataBase.begin(); iter != dataBase.end(); iter++){
-        double timeStamp = iter->first;
-	cv::Mat tempPose = iter->second;
-	cv::Mat R = cv::Mat::eye(3,3,CV_32F);
-	for(int row=0;row<R.rows;row++){
-          for(int col=0;col<R.cols;col++){
-	    R.at<float>(row,col)=tempPose.at<float>(row,col);
-	  }
-	}
-        vector<float> q = toQuaternion(R);
-        f << setprecision(6) << timeStamp << setprecision(7) << " " << tempPose.at<float>(0,3) << " " << tempPose.at<float>(1,3) << " " << tempPose.at<float>(2,3)
-          << " " << q[0] << " " << q[1] << " " << q[2] << " " << q[3] << endl;
-    }
-
-    f.close();
-    cout << endl << "trajectory saved!" << endl;
 }
 }

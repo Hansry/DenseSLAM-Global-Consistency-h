@@ -232,8 +232,8 @@ public:
 
   Eigen::Matrix4f GetLocalMapPose(const ITMLocalMap* currentLocalMap) const{
       Matrix4f Tw_LocalMap = currentLocalMap->estimatedGlobalPose.GetInvM();
-//       return ItmToEigen(currentLocalMap->trackingState->pose_d->GetInvM());
-      return ItmToEigen( Tw_LocalMap * (currentLocalMap->trackingState->pose_d->GetInvM()));
+      return ItmToEigen(currentLocalMap->trackingState->pose_d->GetInvM());
+//       return ItmToEigen( Tw_LocalMap * (currentLocalMap->trackingState->pose_d->GetInvM()));
   }
   
   /// \brief 返回前一帧到当前帧的变换， transform of from previous to current 
@@ -312,6 +312,11 @@ public:
      return GetVoxelSizeBytes() * SDF_BLOCK_SIZE3 * num_used_blocks;
   }
   
+  size_t GetCurrMapAllocateMemoryBytes(ITMLocalMap* currentLocalMap){
+     int num_allocated_blocks = currentLocalMap->scene->index.getNumAllocatedVoxelBlocks();
+     return GetVoxelSizeBytes() * SDF_BLOCK_SIZE3 * num_allocated_blocks;
+  }
+  
   void ResetPrimaryLocalMap() {
    this->denseMapper->ResetScene(this->GetPrimaryLocalMap()->scene);
   }
@@ -328,8 +333,7 @@ public:
     size_t block_size_bytes = GetVoxelSizeBytes() * SDF_BLOCK_SIZE3;
     size_t decayed_block_count = denseMapper->GetDecayedBlockCount();
     return decayed_block_count * block_size_bytes;
-  }
-  
+  }  
   
 //   void WaitForMeshDump() {
 //     if (write_result.valid()) {

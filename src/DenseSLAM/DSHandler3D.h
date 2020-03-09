@@ -7,10 +7,6 @@
 namespace SparsetoDense {
 namespace gui {
 
-/// \brief Customized 3D navigation handler for interactive 3D map visualizations.
-/// Doesn't try to do the fancy object-aware rotations that Pangolin's builtin handler attempts to
-/// do, which is preferred when visualizing large reconstructions and mixed raycast-raster renders.
-  
 /// \brief 为交互式3D地图可视化设置3D导航处理程序，交互方便，在可视化大型重构和混合的光线投影绘制中，不要尝试进行复杂对象的旋转。
 class DSHandler3D : public pangolin::Handler {
  public:

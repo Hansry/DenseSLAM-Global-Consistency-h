@@ -105,10 +105,6 @@ public:
        return this->GetTracker()->getCond_n();
     }
     
-    bool* GetIsDenseMapCreate() {
-      return this->GetTracker()->getIsDenseMapCreate();
-    }
-    
     bool* GetTrackingGL() {
       return this->GetTracker()->getGlobalLable();
     }
@@ -121,10 +117,21 @@ public:
       this->GetTracker()->mCurrentFrame.SetPose(Tcw);
     }
     
-    map<double, cv::Mat> SaveTUMTrajectory(const string& filename){
-      return this->SaveKeyFrameTrajectoryTUM(filename);
+    void SaveTUMTrajectory(const string& filename){
+      this->SaveKeyFrameTrajectoryTUM(filename);
     }
-
+    
+    cv::Mat* GetTrackingDepth() {
+      return this->GetTracker()->getDepth();      
+    }
+    
+    cv::Mat* GetTrackinRaycastDepth(){
+      return this->GetTracker()->getRaycastDepth();
+    }
+    
+    cv::Mat* GetPreKeyframePose() {
+      return this->GetTracker()->getPreKeyframePose();
+    }
 private:
     Eigen::Matrix4f last_egomotion_;
     string strSettingsFile_;    

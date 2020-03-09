@@ -6,6 +6,7 @@
 #include <highgui.h>
 #include <memory>
 #include <fstream>
+#include <string>
 
 #include "DepthProvider.h"
 #include "Utils.h"
@@ -29,7 +30,8 @@ public:
   enum eDatasetType{
     KITTI = 0,
     TUM = 1,
-    EUROC = 2
+    ICLNUIM = 2,
+    EUROC = 3
   };
  
   struct Config {
@@ -129,6 +131,34 @@ public:
     config.velodyne_fname_format = "";
     
     config.frame_timestamp     = "associate.txt";        
+    
+    
+    return config;
+  }
+  
+  static Config ICLNUIMOdometryConfig(){
+    Config config;
+    config.dataset_name        = "ICLNUIM-odometry";
+    config.left_gray_folder    = "";
+    config.right_gray_folder   = "";
+    config.left_color_folder   = "rgb";
+    config.right_gray_folder   = "";
+    config.fname_format        = "%d.png";   
+    config.calibration_fname   = "calib.txt";
+    
+    config.min_depth_m         = 0.001f;
+    config.max_depth_m         = 30.0f;
+    config.depth_folder        = "depth";
+    config.depth_fname_format  = "%d.png";
+    config.read_depth          = true;
+    
+    config.odometry_oxts       = false;
+    config.odometry_fname      = "groundtruth.txt";
+    
+    config.velodyne_folder     =  "";
+    config.velodyne_fname_format = "";
+    
+    config.frame_timestamp     = "";        
     
     
     return config;
@@ -305,6 +335,7 @@ public:
 
   template<typename T>
   static std::string GetFrameName(const std::string &root, const std::string &folder, const std::string &fname_format, T frame_idx) {
+    std::string tempPath = root + "/" + folder + "/" + utils::Format(fname_format, frame_idx);
     return root + "/" + folder + "/" + utils::Format(fname_format, frame_idx);
   }
  

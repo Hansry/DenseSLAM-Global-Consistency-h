@@ -30,6 +30,9 @@ bool Input::HasMoreImages() const {
   else if(mDatasetType == TUM){
     next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx_pair.first);
   }
+  else if(mDatasetType == ICLNUIM){
+    next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx_int);
+  }
   else{
     runtime_error("Currently Unspported dataset type !");
   }
@@ -49,6 +52,10 @@ bool Input::ReadNextFrame() {
     ss >> currentFrameTimeStamp;
     printf("%s%f\n","Input 50: currentFrame:",currentFrameTimeStamp);
   }
+  else if(mDatasetType == ICLNUIM){
+    ReadLeftColor(frame_idx_int, left_frame_color_buf_);
+    currentFrameTimeStamp = (double)frame_idx_int;
+  }
   else{
     runtime_error("Currently Unspported dataset type !");
   }
@@ -67,6 +74,9 @@ bool Input::ReadNextFrame() {
     }
     else if(mDatasetType == TUM){
        ReadRightColor(frame_idx_pair.first, right_frame_color_buf_);
+    }
+    else if(mDatasetType == ICLNUIM){
+       ReadRightColor(frame_idx_int, right_frame_color_buf_);
     }
     else{
        runtime_error("Unspporte frame_idx type !");
@@ -96,6 +106,9 @@ bool Input::ReadNextFrame() {
     }
     else if(mDatasetType == TUM){
        depth_provider_->GetDepth(frame_idx_pair.second, stereo_calibration_, depth_out, input_scale_);
+    }
+    else if(mDatasetType == ICLNUIM){
+       depth_provider_->GetDepth(frame_idx_int, stereo_calibration_, depth_out, input_scale_);
     }
     else{
        runtime_error("Unspporte frame_idx type !");
@@ -199,6 +212,12 @@ void Input::GetRightColor(cv::Mat3b &out) const {
                                   config_.right_color_folder,
                                   config_.fname_format,
                                   frame_idx_pair.first));
+  }
+  else if(GetDatasetType() == ICLNUIM){
+    buf = cv::imread(GetFrameName(dataset_folder_,
+                                            config_.right_color_folder,
+                                            config_.fname_format,
+                                            frame_idx_int));
   }
   else{
     runtime_error("Currently unspported type !");

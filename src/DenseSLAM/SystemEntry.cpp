@@ -17,7 +17,7 @@ DEFINE_string(strSettingFile, "", "the path to load the setting file for ORBSLAM
 DEFINE_int32(frame_offset, 0, "The frame index from which to start reading the dataset sequence.");
 DEFINE_int32(frame_limit, 0, "How many frames to process in auto mode. 0 = no limit.");
 DEFINE_bool(voxel_decay, true, "Whether to enable map regularization via voxel decay (a.k.a. voxel garbage collection).");
-DEFINE_int32(min_decay_age, 1000, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection)."); //kitti: 5
+DEFINE_int32(min_decay_age, 150, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection)."); //kitti: 5
 DEFINE_int32(max_decay_weight, 0.5, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed."); //kitti: 2
 DEFINE_int32(kitti_tracking_sequence_id, -1, "Used in conjunction with --dataset_type kitti-tracking.");
 DEFINE_bool(direct_refinement, false, "Whether to refine motion estimates for other cars computed sparsely with RANSAC using a semidense direct image alignment method.");
@@ -37,13 +37,13 @@ DEFINE_int32(evaluation_delay, 0, "How many frames behind the current one should
 DEFINE_bool(close_on_complete, true, "Whether to shut down automatically once 'frame_limit' is reached.");
 DEFINE_bool(record, true, "Whether to record a video of the GUI and save it to disk. Using an "
                            "external program usually leads to better results, though.");
-DEFINE_bool(chase_cam, false, "Whether to preview the reconstruction in chase cam mode, following "
+DEFINE_bool(chase_cam, true, "Whether to preview the reconstruction in chase cam mode, following "
                              "the camera from a third person view.");
 DEFINE_int32(fusion_every, 1, "Fuse every kth frame into the map. Used for evaluating the system's "
                               "behavior under reduced temporal resolution.");
 DEFINE_bool(autoplay, false, "Whether to start with autoplay enabled. Useful for batch experiments.");
 DEFINE_bool(useOrbSLAMViewer, false, "Whether to launch the GUI of ORBSLAM2.");
-DEFINE_bool(viewRaycastDepth, false, "Whether to view the raycast depth.");
+DEFINE_bool(viewRaycastDepth, true, "Whether to view the raycast depth.");
 
 // Note: the [RIP] tags signal spots where I wasted more than 30 minutes debugging a small, sillyzhe
 // issue, which could easily be avoided in the future.
@@ -193,7 +193,11 @@ void BuildDenseSlamOdometry(const string &dataset_root,
   }
   else if(dataset_type == Input::TUM){
     input_config = Input::TUMOdometryConfig();
-    FLAGS_chase_cam = true;
+//     FLAGS_chase_cam = true;
+  }
+  else if(dataset_type == Input::ICLNUIM){
+    input_config = Input::ICLNUIMOdometryConfig();
+//     FLAGS_chase_cam = true;
   }
   else {
     runtime_error("Unspported dataset type!");
@@ -229,6 +233,16 @@ void BuildDenseSlamOdometry(const string &dataset_root,
       right_color_proj = left_color_proj;
       velo_to_left_gray_cam.setOnes();
       cout << "Read calibration from TUM data..." << endl
+           << "Frame size: " << frame_size << endl
+	   << "Proj: " << endl << left_color_proj << endl;
+  }
+  else if(dataset_type == SparsetoDense::Input::ICLNUIM){
+      ReadTUMOdometryCalibration(dataset_root + "/" + input_config.calibration_fname, left_color_proj, downscale_factor);
+      left_gray_proj = left_color_proj;
+      right_gray_proj = left_color_proj;
+      right_color_proj = left_color_proj;
+      velo_to_left_gray_cam.setOnes();
+      cout << "Read calibration from ICL-NUIM data..." << endl
            << "Frame size: " << frame_size << endl
 	   << "Proj: " << endl << left_color_proj << endl;
   }
@@ -402,6 +416,9 @@ int main(int argc, char **argv) {
   }
   else if (dataset_type_int == 1){
     dataset_type = SparsetoDense::Input::TUM;
+  }
+  else if (dataset_type_int == 2){
+    dataset_type = SparsetoDense::Input::ICLNUIM;
   }
   else{
       runtime_error("Unspported dataset mode !");

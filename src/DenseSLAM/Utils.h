@@ -77,7 +77,7 @@ bool EndsWith(const std::string &value, const std::string &ending);
 /// function, not the actual string object.
 std::string Format(const std::string& fmt, ...);
 
-std::string Format(const std::string& fmt, std::string frame_idx);
+// std::string Format(const std::string& fmt, std::string frame_idx);
 
 inline bool FileExists(const std::string &fpath) {
   struct stat buffer;

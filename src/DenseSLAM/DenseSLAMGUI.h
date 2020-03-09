@@ -85,14 +85,6 @@ public:
 
     delete lidar_vis_colors_;
     delete lidar_vis_vertices_;
-    
-//     delete NumLocalMap;
-//     delete NumFrame;
-//     delete NumKeyFrame;
-//     delete CurrentLocalMapStartKeyframeNo;
-//     delete CurrentLocalMapEndKeyframeNo;
-    
-    
   }
   
   /// \brief 绘制InfiniTAM光线投影后的视图对应的相机位姿，用锥体形状表示
@@ -115,6 +107,35 @@ public:
   /// 显示检测出的光流
   //void PreviewSparseSF(const vector<RawFlow, Eigen::aligned_allocator<RawFlow>> &flow, const pangolin::View &view);
     void PreviewSparseSF(const vector<RawFlow, Eigen::aligned_allocator<RawFlow>> &flow, const pangolin::View &view);
+  
+  /// \brief Produces a visual pixelwise diff image of the supplied depth maps, into out_image.
+  /// 生成所提供深度图和预测的深度图的pixelwise误差
+  void DiffDepthmaps(
+      const cv::Mat1s &input_depthmap,
+      const float* rendered_depth,
+      int width,
+      int height,
+      int delta_max,
+      uchar * out_image,
+      float baseline_m,
+      float focal_length_px
+  );
+  
+  /// \brief Renders the velodyne points for visual inspection.
+  /// \param lidar_points
+  /// \param P Left camera matrix.
+  /// \param Tr Transforms velodyne points into the left camera's frame.
+  /// \note For fused visualization we need to use the depth render as a zbuffer when rendering
+  /// LIDAR points, either in OpenGL, or manually by projecting LIDAR points and manually checking
+  /// their resulting depth. But we don't need this visualization yet; So far, it's enough to render
+  /// the LIDAR results for sanity, and then for every point in the cam frame look up the model
+  /// depth and compare the two.
+  void PreviewLidar(
+      const Eigen::MatrixX4f &lidar_points,
+      const Eigen::Matrix34f &P,
+      const Eigen::Matrix4f &Tr,
+      const pangolin::View &view
+  );
   
 protected:
   
@@ -152,7 +173,6 @@ protected:
   pangolin::View *main_view_;
   pangolin::View *orbslam_view_;
   pangolin::View *detail_views_;
-  pangolin::View *detail_views_raycast;
   pangolin::View rgb_view_;
   pangolin::View depth_view_;
   pangolin::View raycast_depth_view_;
@@ -171,7 +191,7 @@ protected:
   **/
   
   // Graph plotter and its data logger object
-  pangolin::Plotter *plotter_track;
+//   pangolin::Plotter *plotter_track;
   pangolin::Plotter *plotter_memory;
   pangolin::DataLog data_log_track;
   pangolin::DataLog data_log_memory;
@@ -211,7 +231,7 @@ protected:
   // Indicates which object is currently being visualized in the GUI.
   int visualized_object_idx_ = 0;
 
-  int current_preview_type_ = PreviewType::kLatestRaycast;
+  int current_preview_type_ = PreviewType::kColor;
   int current_preview_depth_type = PreviewType::kRaycastDepth;
   int current_preview_rgb_type = PreviewType::kRaycastImage;
 
