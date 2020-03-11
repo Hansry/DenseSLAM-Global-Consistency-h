@@ -205,6 +205,7 @@ protected:
 //   pangolin::Var<string> *NumActiveLocalMap;
   pangolin::Var<string> *NumFrame;
   pangolin::Var<string> *NumKeyFrame;
+  pangolin::Var<string> *AvgFusionTime;
   pangolin::Var<string> *CurrentLocalMapStartKeyframeNo;
   pangolin::Var<string> *CurrentLocalMapEndKeyframeNo;
 

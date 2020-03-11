@@ -17,8 +17,8 @@ DEFINE_string(strSettingFile, "", "the path to load the setting file for ORBSLAM
 DEFINE_int32(frame_offset, 0, "The frame index from which to start reading the dataset sequence.");
 DEFINE_int32(frame_limit, 0, "How many frames to process in auto mode. 0 = no limit.");
 DEFINE_bool(voxel_decay, true, "Whether to enable map regularization via voxel decay (a.k.a. voxel garbage collection).");
-DEFINE_int32(min_decay_age, 150, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection)."); //kitti: 5
-DEFINE_int32(max_decay_weight, 0.5, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed."); //kitti: 2
+DEFINE_int32(min_decay_age, 500, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection)."); //kitti: 5
+DEFINE_int32(max_decay_weight, 10, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed."); //kitti: 2
 DEFINE_int32(kitti_tracking_sequence_id, -1, "Used in conjunction with --dataset_type kitti-tracking.");
 DEFINE_bool(direct_refinement, false, "Whether to refine motion estimates for other cars computed sparsely with RANSAC using a semidense direct image alignment method.");
 // TODO-LOW(andrei): Automatically adjust the voxel GC params when depth weighting is enabled.
@@ -37,7 +37,7 @@ DEFINE_int32(evaluation_delay, 0, "How many frames behind the current one should
 DEFINE_bool(close_on_complete, true, "Whether to shut down automatically once 'frame_limit' is reached.");
 DEFINE_bool(record, true, "Whether to record a video of the GUI and save it to disk. Using an "
                            "external program usually leads to better results, though.");
-DEFINE_bool(chase_cam, true, "Whether to preview the reconstruction in chase cam mode, following "
+DEFINE_bool(chase_cam, false, "Whether to preview the reconstruction in chase cam mode, following "
                              "the camera from a third person view.");
 DEFINE_int32(fusion_every, 1, "Fuse every kth frame into the map. Used for evaluating the system's "
                               "behavior under reduced temporal resolution.");

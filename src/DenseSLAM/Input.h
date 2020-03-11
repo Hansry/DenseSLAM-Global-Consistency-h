@@ -147,7 +147,7 @@ public:
     config.calibration_fname   = "calib.txt";
     
     config.min_depth_m         = 0.001f;
-    config.max_depth_m         = 30.0f;
+    config.max_depth_m         = 10.0f;
     config.depth_folder        = "depth";
     config.depth_fname_format  = "%d.png";
     config.read_depth          = true;

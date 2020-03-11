@@ -256,6 +256,7 @@ void PangolinGui::Run(){
       
       *(NumFrame) = Format("%d", dense_slam_->GetCurrentFrameNo());
       *(NumKeyFrame) = Format("%d", dense_slam_->GetKeyFrameNum());
+      *(AvgFusionTime) = Format("%f%s", (float)dense_slam_->GetTotalFusionTime()/(float)dense_slam_->GetKeyFrameNum(), " ms");
 //       *(NumActiveLocalMap) = Format("%d", dense_slam_->GetNumActiveLocalMap());
       *(NumLocalMap) = Format("%d", dense_slam_->GetNumLocalMap());
       if(dense_slam_->GettodoList().size()>0){
@@ -371,6 +372,7 @@ void PangolinGui::CreatePangolinDisplays(){
     
     NumFrame = new pangolin::Var<string>("ui.Number of Frames: ", "");
     NumKeyFrame = new pangolin::Var<string>("ui.Number of KeyFrames: ", "");
+    AvgFusionTime = new pangolin::Var<string>("ui.Avg Fusion Time: ", "");
     
     CurrentLocalMapStartKeyframeNo = new pangolin::Var<string> ("ui.Curr LocalMap Start Keyframe No.", "");
     CurrentLocalMapEndKeyframeNo = new pangolin::Var<string> ("ui.Curr LocalMap End Keyframe No.", "");
@@ -453,10 +455,10 @@ void PangolinGui::CreatePangolinDisplays(){
 
     // Add labels to our data logs (and automatically to our plots).
     data_log_memory.SetLabels({
-                      "Free GPU Memory (100s of MiB)",
-		      "Total GPU Memory (100s of MiB)",
-		      "Dense map allocated memory (100s of MiB)",
-                      "Dense map memory usage (10s of MiB)",
+                      "Free GPU Memory (100 MB)",
+		      "Total GPU Memory (100 MB)",
+		      "Dense map allocated memory (100 MB)",
+                      "Dense map memory usage (10 MB)",
                      });
     
     // OpenGL 'view' of data such as the number of actively tracked instances over time.

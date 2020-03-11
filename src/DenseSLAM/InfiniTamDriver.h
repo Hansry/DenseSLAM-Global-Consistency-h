@@ -259,7 +259,7 @@ public:
                          currentLocalMap->renderState, 
                          voxel_decay_params_.max_decay_weight,
                          voxel_decay_params_.min_decay_age, 
-                         false);
+                         true);
     }
   }
 

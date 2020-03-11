@@ -44,7 +44,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   input_raw_depth_image_n = (*input_raw_depth_image_).clone();
   
   cv::Mat orbSLAMInputDepth(input_raw_depth_image_n.rows, input_raw_depth_image_n.cols, CV_32FC1);
-  std::cout << "denseslam 47: " << std::endl;
+//   std::cout << "denseslam 47: " << std::endl;
 
   for(int row =0; row<input_rgb_image_n.rows; row++){
     for(int col =0; col<input_rgb_image_n.cols; col++){
@@ -122,7 +122,7 @@ void DenseSlam::ProcessFrame(Input *input) {
      unique_lock<mutex> lock(mMutexFrameDataBase);
      mframeDataBase[currFrameTimeStamp]= make_pair((input_rgb_image_n), (input_raw_depth_image_n));
   }
-  std::cout << "denseslam 76: "<<std::endl;
+//   std::cout << "denseslam 76: "<<std::endl;
      current_frame_no_++;
   });  
   
@@ -277,6 +277,7 @@ void DenseSlam::ProcessFrame(Input *input) {
 	      unique_lock<mutex> lock(mMutexCond1);
 	      (*orbslam_static_scene_->GetPreKeyframePose()) = orbSLAM2_Pose.clone();
 	    }
+// 	    cout << "DenseSlam 280: " << orbSLAM2_Pose << endl;
 	    Eigen::Matrix4f currLocalMapPose = drivers::ItmToEigen(currentLocalMap->estimatedGlobalPose.GetM());
 	    if(shouldClearPoseHistory){
 	      pose_history_.clear();
@@ -373,7 +374,8 @@ void DenseSlam::ProcessFrame(Input *input) {
          utils::Toc();
       }
    }
-   utils::Toc();
+   int64_t fusion_time = utils::Toc();
+   fusionTotalTime += fusion_time;
    /*
    if(shouldStartNewLocalMap(todoList.back().dataId) && !first_frame ){
        shouldCreateNewLocalMap = true;
@@ -421,18 +423,18 @@ int DenseSlam::createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose){
 void DenseSlam::SaveStaticMap(const std::string &dataset_name, const std::string &depth_name, const ITMLib::Engine::ITMLocalMap* currentLocalMap, int localMap_no) const {
   string target_folder = EnsureDumpFolderExists(dataset_name);
   string map_fpath = target_folder + "/" + "mesh-" + depth_name + "-" + std::to_string(localMap_no) + "-frames.obj";
-  cout << "Saving full static map to: " << map_fpath << endl;
   static_scene_->SaveCurrSceneToMesh(map_fpath.c_str(), currentLocalMap->scene);
+  cout << "Saving full static map to: " << map_fpath << endl;
 }
 
 std::string DenseSlam::EnsureDumpFolderExists(const string &dataset_name) const {
   string today_folder = utils::GetDate();
-  string target_folder = "../mesh_out/" + dataset_name + "/" + today_folder;
+  string target_folder = "/home/hansry/DenseSLAM-Global-Consistency-h/mesh_out/" + dataset_name + "/" + today_folder;
   string mkdir_folder = "mkdir -p " + target_folder;
-  if(system(mkdir_folder.c_str())) {
-    throw runtime_error(utils::Format("Could not create directory: %s", target_folder.c_str()));
-  }
-
+  bool unsucess = std::system(mkdir_folder.c_str());
+//   if(unsucess) {
+//     throw runtime_error(utils::Format("Could not create directory: %s", target_folder.c_str()));
+//   }
   return target_folder;
 }
 }

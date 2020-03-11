@@ -233,7 +233,7 @@ public:
 //   }
   
   void orbslam_static_scene_trackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double& timestamp){
-    cout << "DenseSLAM.h 235" << endl;
+//     cout << "DenseSLAM.h 235" << endl;
     orbslam_static_scene_->orbTrackRGBDSLAM(im,depthmap,timestamp);
   }
   
@@ -372,6 +372,10 @@ public:
     return static_scene_;
   }
   
+  int64_t GetTotalFusionTime() const{
+    return fusionTotalTime;
+  }
+  
   SUPPORT_EIGEN_FIELDS;
 
 private:
@@ -382,6 +386,7 @@ private:
   
   
   double currFrameTimeStamp;
+  int64_t fusionTotalTime = 0; 
 
   ITMUChar4Image *out_image_;
   ITMFloatImage *out_image_float_;
