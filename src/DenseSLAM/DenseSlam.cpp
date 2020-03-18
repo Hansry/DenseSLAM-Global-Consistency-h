@@ -23,7 +23,6 @@ void DenseSlam::ProcessFrame(Input *input) {
      return;
   }
   
-  
   utils::Tic("Read input and compute depth");
   if(!input->ReadNextFrame()) {
      throw runtime_error("Could not read input from the data source.");

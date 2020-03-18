@@ -509,8 +509,7 @@ void PangolinGui::CreatePangolinDisplays(){
 
 void PangolinGui::ProcessFrame(){
     cout << endl << "[Starting frame " << dense_slam_->GetCurrentFrameNo() + 1 << "]" << endl;
-    if (! dense_slam_input_->HasMoreImages()){
-      
+    if (! dense_slam_input_->HasMoreImages() && dense_slam_input_->GetFrameIndex() > 980){
       dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
       cout << "No more images, Bye!" << endl;
       
@@ -523,12 +522,12 @@ void PangolinGui::ProcessFrame(){
       }
       getchar();
     }
-    if (! dense_slam_input_->HasMoreImages() && paramGUI.close_on_complete) {
-      dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
-      cerr << "No more images, Bye!" << endl;
-      pangolin::QuitAll();
-      return;
-    }
+//     if (! dense_slam_input_->HasMoreImages() && paramGUI.close_on_complete) {
+//       dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
+//       cerr << "No more images, Bye!" << endl;
+//       pangolin::QuitAll();
+//       return;
+//     }
       
     Tic("DenseSLAM frame");
     // Main workhorse function of the underlying SLAM system.

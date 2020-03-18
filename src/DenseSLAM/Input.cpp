@@ -22,7 +22,7 @@ void Input::GetFrameCvImages(T frame_idx, std::shared_ptr<cv::Mat3b> &rgb, std::
   cv::resize(depth_buf_small_, *raw_depth, cv::Size(), 1.0/input_scale_, 1.0/input_scale_, cv::INTER_NEAREST);
 }
 
-bool Input::HasMoreImages() const {
+bool Input::HasMoreImages() {
   string next_fpath = "";
   if(mDatasetType == KITTI){
     next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx_int);
@@ -36,7 +36,12 @@ bool Input::HasMoreImages() const {
   else{
     runtime_error("Currently Unspported dataset type !");
   }
-  return utils::FileExists(next_fpath);
+  bool fileExists = utils::FileExists(next_fpath);
+  if(!fileExists){
+    frame_idx_index++;
+    frame_idx_int = frame_idx_index;
+  }
+  return fileExists;
 }
 
 bool Input::ReadNextFrame() {

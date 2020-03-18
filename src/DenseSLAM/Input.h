@@ -147,7 +147,7 @@ public:
     config.calibration_fname   = "calib.txt";
     
     config.min_depth_m         = 0.001f;
-    config.max_depth_m         = 10.0f;
+    config.max_depth_m         = 30.0f;
     config.depth_folder        = "depth";
     config.depth_fname_format  = "%d.png";
     config.read_depth          = true;
@@ -218,7 +218,7 @@ public:
   }
   
   //判断是否还有剩余的图片
-  bool HasMoreImages() const;
+  bool HasMoreImages();
 
   /// \brief 讲读取器推进到下一帧，如果下一帧读取成功则返回True
   bool ReadNextFrame();
@@ -293,6 +293,10 @@ public:
   
   double GetCurrentFrame_double(void) const{
     return currentFrameTimeStamp;
+  }
+  
+  int GetFrameIndex(void) const {
+    return frame_idx_index;
   }
   
  private:

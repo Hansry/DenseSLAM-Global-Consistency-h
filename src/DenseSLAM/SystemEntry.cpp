@@ -17,8 +17,8 @@ DEFINE_string(strSettingFile, "", "the path to load the setting file for ORBSLAM
 DEFINE_int32(frame_offset, 0, "The frame index from which to start reading the dataset sequence.");
 DEFINE_int32(frame_limit, 0, "How many frames to process in auto mode. 0 = no limit.");
 DEFINE_bool(voxel_decay, true, "Whether to enable map regularization via voxel decay (a.k.a. voxel garbage collection).");
-DEFINE_int32(min_decay_age, 500, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection)."); //kitti: 5
-DEFINE_int32(max_decay_weight, 10, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed."); //kitti: 2
+DEFINE_int32(min_decay_age, 5000, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection)."); //kitti: 5, ICLNUIM-lvn1: 8, ICLNUIM-else: 5
+DEFINE_int32(max_decay_weight, 1, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed."); //kitti: 2, ICLNUIM-lvn1: 1, ICLNUIM-else: 1
 DEFINE_int32(kitti_tracking_sequence_id, -1, "Used in conjunction with --dataset_type kitti-tracking.");
 DEFINE_bool(direct_refinement, false, "Whether to refine motion estimates for other cars computed sparsely with RANSAC using a semidense direct image alignment method.");
 // TODO-LOW(andrei): Automatically adjust the voxel GC params when depth weighting is enabled.
