@@ -179,6 +179,12 @@ public:
     this->denseMapper->ProcessFrame(
       this->view, currLocalMap->trackingState, currLocalMap->scene, currLocalMap->renderState);
   }
+  
+  /// @brief 对局部地图进行反融合
+  void DeIntegrateLocalMap(const ITMLocalMap* currLocalMap) const{
+    this->denseMapper->DeProcessFrame(
+      this->view, currLocalMap->trackingState, currLocalMap->scene, currLocalMap->renderState);
+  }
 
   /// @brief 对于主局部地图而言，调用了PrepareNextStepLocalMap
   void PrepareNextStep() {

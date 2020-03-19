@@ -43,6 +43,30 @@ struct TodoListEntry {
       int endKeyframeTimeStamp;
 };
 
+struct fusionFrameInfo{
+     fusionFrameInfo(cv::Mat pose, cv::Mat3b rgb, cv::Mat1s depth, short flag)
+                  :poseinfo(pose), 
+                  rgbinfo(rgb), 
+                  depthinfo(depth),
+                  flaginfo(flag){}
+                  
+     fusionFrameInfo(void) {}
+     cv::Mat poseinfo;
+     cv::Mat3b rgbinfo;
+     cv::Mat1s depthinfo;
+     short flaginfo;
+};
+
+struct mapKeyframeInfo{
+     mapKeyframeInfo(double timestamp, cv::Mat pose): 
+                 timestampinfo(timestamp),
+                 poseinfok(pose){}
+                 
+     mapKeyframeInfo(void) {}
+     double timestampinfo;
+     cv::Mat poseinfok;
+};
+
 class DenseSlam {
  public:
   DenseSlam(InfiniTamDriver *itm_static_scene_engine,
@@ -365,6 +389,9 @@ public:
   
   int createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose);
   map<double, std::pair<cv::Mat3b, cv::Mat1s>> mframeDataBase;
+  
+  //融合帧的timestamp,位姿，RGB信息和深度图
+  map<double, fusionFrameInfo> mfusionFrameDataBase;
   
   std::vector<TodoListEntry> todoList;
   

@@ -69,6 +69,10 @@ public:
         return this->GetTracker();
     }
     
+    ORB_SLAM2::Map* GetOrbSlamMap() const {
+        return this->GetMap();
+    }
+    
     cv::Mat orbTrackStereo(const cv::Mat& imleft, const cv::Mat& imright, const double& timestamp) {
          return this->TrackStereo(imleft, imright, timestamp);
     }
