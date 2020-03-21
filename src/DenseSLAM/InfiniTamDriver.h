@@ -113,7 +113,7 @@ public:
     delete last_egomotion_;
   }
 
-  void UpdateView(const cv::Mat3b &rgb_image, const cv::Mat1s &raw_depth_image);
+  void UpdateView(const cv::Mat3b &rgb_image, const cv::Mat1s &raw_depth_image, double timestamp);
   
 //   ITMLib::ITMTrackingState::TrackingResult trackingResult(const cv::Mat3b &rgb_image,
 //                                                     const cv::Mat1s &raw_depth_image);

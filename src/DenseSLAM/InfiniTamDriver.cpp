@@ -224,11 +224,12 @@ void InfiniTamDriver::GetFloatImage(
 
 //将OpenCV中的rgb_image和raw_depth_image转换成InfiniTAM中对应的数据类型，并进行更新
 void InfiniTamDriver::UpdateView(const cv::Mat3b &rgb_image,
-                                 const cv::Mat1s &raw_depth_image) {
+                                 const cv::Mat1s &raw_depth_image,
+				 const double timestamp) {
   CvToItm(rgb_image, rgb_itm_);
   CvToItm(raw_depth_image, raw_depth_itm_);
   
-  this->viewBuilder->UpdateView(&view, rgb_itm_, raw_depth_itm_, settings->useBilateralFilter);
+  this->viewBuilder->UpdateView(&view, rgb_itm_, raw_depth_itm_, timestamp, settings->useBilateralFilter);
   
 }
 

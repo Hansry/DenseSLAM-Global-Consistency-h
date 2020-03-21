@@ -36,7 +36,9 @@ void PangolinGui::DrawPose(long int current_time_ms){
     }
     else if(dense_slam_input_->GetDatasetType() == Input::TUM || dense_slam_input_->GetDatasetType() == Input::ICLNUIM){
       kMaxFrustumScale = 0.3;
+         //这代码只画出最新5帧的位姿
       for (int i = static_cast<int>(phist.size())-5; i < static_cast<int>(phist.size()) - 1; ++i) {
+//          for (int i = 0; i < static_cast<int>(phist.size()) - 1; ++i) {
             DrawPoseFrustum(phist[i], color_blue, kMaxFrustumScale, frustum_root_cube_scale);
       }
     }

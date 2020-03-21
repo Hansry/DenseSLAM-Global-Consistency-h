@@ -101,6 +101,7 @@ void DenseSlam::ProcessFrame(Input *input) {
      return;
   }
   double currBAKFTime = mcurrBAKeyframe->mTimeStamp;
+//   cout << "DenseSlam 104: currBAKFTime: " << currBAKFTime << endl;
 //   cout << "DenseSlam.cpp 175: currBAKFTime: " << currBAKFTime << endl;
   {
     unique_lock<mutex> lock(mMutexBAKF);
@@ -149,6 +150,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   mfusionFrameDataBase[currBAKFTime] = currFusionFrame;
   
   vector<ORB_SLAM2::KeyFrame*> currAllKeyFrame = orbslam_static_scene_->GetMap()->GetAllKeyFrames();
+//   sort(currAllKeyFrame.begin(),currAllKeyFrame.end(),ORB_SLAM2::KeyFrame::lts);
   
   //error, timestamp
   map<float, mapKeyframeInfo, greater<float>> mapPoseError;
@@ -205,7 +207,7 @@ void DenseSlam::ProcessFrame(Input *input) {
 	float traceValue =  innerProduct.trace();
 	
 	float rightError = sqrt(traceValue);
-	
+		
 	mapKeyframeInfo currKeyframe(currMapKeyframeTS, currMapKeyframe->GetPoseInverse());
 	
         mapPoseError[rightError] = currKeyframe;
@@ -218,7 +220,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   //当找到的位姿误差大于10帧了
   //在线调整的帧数
   int correctNum = 5;
-  if(mapPoseError.size()>8){
+  if(mapPoseError.size()>2){
     
      int countNum = 0;
      map<float,mapKeyframeInfo,greater<float>>::iterator errorIter;
@@ -236,13 +238,20 @@ void DenseSlam::ProcessFrame(Input *input) {
 	 cv::Mat3b currRGBInfo = defusioniter->second.rgbinfo;
 	 cv::Mat1s currDepthInfo = defusioniter->second.depthinfo;
 	 
+// 	 std::cout << "DenseSlam.cpp 242: M_d: " << currPose.inv() << std::endl;
+
+	 //Deintegrate
 	 static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(currPose));
-	 static_scene_->UpdateView(currRGBInfo, currDepthInfo);
+// 	 cout << "DenseSlam245: timestamp: " << timestamp << endl;
+	 static_scene_->UpdateView(currRGBInfo, currDepthInfo, timestamp);
 	 static_scene_->DeIntegrateLocalMap(currentLocalMap);
 	 
+ 	 //Reintegrate
 	 defusioniter->second.poseinfo = errorIter->second.poseinfok.clone();
 	 currPose = defusioniter->second.poseinfo.clone();
 // 	 cout << mfusionFrameDataBase[timestamp].poseinfo << endl;
+// 	 std::cout << "DenseSlam.cpp 252: M_d: " << currPose.inv() << std::endl;
+
 	 static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(currPose));
 	 static_scene_->IntegrateLocalMap(currentLocalMap);
 	 
@@ -266,7 +275,7 @@ void DenseSlam::ProcessFrame(Input *input) {
       cv::Mat1s currDepthInfo = iter->second.depthinfo;
       
       static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(currPose));
-      static_scene_->UpdateView(currRGBInfo, currDepthInfo);
+      static_scene_->UpdateView(currRGBInfo, currDepthInfo, 0.0);
       static_scene_->DeIntegrateLocalMap(currentLocalMap);
       
       mfusionFrameDataBase.erase(iter);
@@ -362,7 +371,7 @@ void DenseSlam::ProcessFrame(Input *input) {
       //主要为跟踪做准备
       static_scene_->PrepareNextStepLocalMap(currentLocalMap);
       //更新当前的RGB及深度图
-      static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_);
+      static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_, 0.0);
       //做跟踪
       static_scene_->TrackLocalMap(currentLocalMap);
       //由raycast得到的深度图与当前深度图做ICP跟踪得到的位姿Tw->c
@@ -372,7 +381,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   
   utils::Tic("Static map fusion");
   if (FLAGS_external_odo && current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty()) {
-       static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_);
+       static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_, currBAKFTime);
        static_scene_->IntegrateLocalMap(currentLocalMap);
        utils::Tic("Map decay");
        Decay();
