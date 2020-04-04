@@ -86,7 +86,11 @@ void DenseSlam::ProcessFrame(Input *input) {
   
   { 
      unique_lock<mutex> lock(mMutexFrameDataBase);
-     mframeDataBase[currFrameTimeStamp]= make_pair((input_rgb_image_n), (input_raw_depth_image_n));
+     cv::Mat identity = cv::Mat::eye(4,4,CV_32FC1);
+     cv::Mat depthweight = cv::Mat::ones(input_raw_depth_image_->rows, input_raw_depth_image_->cols, CV_8UC1);
+     currFrameInfo currNormalFrame(identity, input_rgb_image_n, input_raw_depth_image_n, depthweight);
+     mframeDataBase[currFrameTimeStamp] = currNormalFrame;
+//      mframeDataBase[currFrameTimeStamp]= make_pair((input_rgb_image_n), (input_raw_depth_image_n));
   }
      current_frame_no_++;
   });  
@@ -100,25 +104,120 @@ void DenseSlam::ProcessFrame(Input *input) {
   if(mcurrBAKeyframe->isBad()){
      return;
   }
+  
+  
   double currBAKFTime = mcurrBAKeyframe->mTimeStamp;
-//   cout << "DenseSlam 104: currBAKFTime: " << currBAKFTime << endl;
-//   cout << "DenseSlam.cpp 175: currBAKFTime: " << currBAKFTime << endl;
+  orbSLAM2_Pose = mcurrBAKeyframe->GetPoseInverse();
+
+  float fx = projection_left_rgb_(0,0);
+  float fy = projection_left_rgb_(1,1);
+  float cx = projection_left_rgb_(0,2);
+  float cy = projection_left_rgb_(1,2);
+  float inv_fx = 1.0/fx;
+  float inv_fy = 1.0/fy;
+  
+  utils::Tic("Depth Filter !");
   {
     unique_lock<mutex> lock(mMutexBAKF);
-    std::map<double, std::pair<cv::Mat3b, cv::Mat1s>>::iterator iter;
-    iter = mframeDataBase.find(currBAKFTime);
-    if(iter != mframeDataBase.end()){
-      input_rgb_image_copy_ = (iter->second.first).clone();
-      input_raw_depth_image_copy_ = (iter->second.second).clone();
+    std::map<double, cv::Mat>::iterator iter_pose;
+    for(iter_pose=orbslam_static_scene_->GetgetFrameDataInfo()->begin();  iter_pose!=orbslam_static_scene_->GetgetFrameDataInfo()->end();  iter_pose++){
+        std::map<double, currFrameInfo>::iterator iter_c;
+        iter_c = mframeDataBase.find(iter_pose->first);
+	if(iter_c!=mframeDataBase.end()){
+	  //其中位姿为世界坐标到当前坐标系下的变换矩阵
+	  iter_c->second.poseinfoc = (iter_pose->second).clone();
+	}
+    }
+    
+    std::map<double, currFrameInfo>::iterator iter;
+    std::map<double, cv::Mat>::iterator iter1;
+    iter = mframeDataBase.find(currBAKFTime); 
+    iter1 = orbslam_static_scene_->GetgetFrameDataInfo()->find(currBAKFTime);
+    
+    if(iter != mframeDataBase.end() && iter1 !=orbslam_static_scene_->GetgetFrameDataInfo()->end()){
+      ///当前关键帧的深度以及颜色信息
+      input_rgb_image_copy_ = (iter->second.rgbinfoc).clone();  
+      input_raw_depth_image_copy_ = (iter->second.depthinfoc).clone();
+//       input_weight_copy_ = (iter->second.depthweightinfoc).clone();
+      
+      int imrows = input_raw_depth_image_copy_.rows;
+      int imcols = input_raw_depth_image_copy_.cols;
+      
+      cout << "DenseSLAM 142:" << mframeDataBase.size() << endl;
+      for(std::map<double, currFrameInfo>::iterator iter_temp=mframeDataBase.begin(); iter_temp!=iter; iter_temp++){
+	//需要将当前帧的深度和颜色信息融合到当前帧中
+        cv::Mat1s temp_depth_image = iter_temp->second.depthinfoc;
+	cv::Mat temp_pose = iter_temp->second.poseinfoc;
+	if(is_identity_matrix(temp_pose)){
+	  continue;
+	}
+// 	cout << "DenseSlam: pose: " << temp_pose << endl;
+	
+	cv::Mat depth_curr_coord = cv::Mat::ones(3,1,CV_32FC1);
+	cv::Mat depth_curr_keyframe_coord = cv::Mat::ones(3,1,CV_32FC1);
+	
+	cout << "DenseSlam 148: " << endl;
+        int count = 0;
+	for(int row=0; row < imrows; row++){
+	  for(int col=0; col < imcols; col++){
+	     
+	     //将空间点从图像坐标投影到基于当前帧的空间点
+	     depth_curr_coord.at<float>(2,0) = ((float)temp_depth_image.at<int16_t>(row,col))/1000.0;
+	     if(depth_curr_coord.at<float>(2,0)<0.005) {
+	       continue;
+	     }
+	     
+	     depth_curr_coord.at<float>(0,0) = depth_curr_coord.at<float>(2,0) * (row - cx) * inv_fx; //X = Z*(u-cx)/fx
+	     depth_curr_coord.at<float>(1,0) = depth_curr_coord.at<float>(2,0) * (col - cy) * inv_fy; //Y = Z*(v-cy)/fx
+	     
+	     //世界坐标系下的空间点
+	     depth_curr_keyframe_coord = temp_pose.rowRange(0,3).colRange(0,3) * depth_curr_coord + temp_pose.rowRange(0,3).col(3);
+	     //当前关键帧下的空间点
+	     cv::Mat orbSLAM2_Pose_Tcw = orbSLAM2_Pose.clone().inv();
+	     depth_curr_keyframe_coord = orbSLAM2_Pose_Tcw.rowRange(0,3).colRange(0,3) * depth_curr_keyframe_coord + orbSLAM2_Pose_Tcw.rowRange(0,3).col(3);
+	     
+	     //将当前关键帧的空间点投影到当前关键帧像平面上
+	     //+0.5主要是为了四舍五入
+	     int row_u =  fx * depth_curr_keyframe_coord.at<float>(0,0) * (1.0/depth_curr_keyframe_coord.at<float>(2,0)) + cx + 0.5; //u = fx*X/Z + cx
+	     int col_v =  fy * depth_curr_keyframe_coord.at<float>(1,0) * (1.0/depth_curr_keyframe_coord.at<float>(2,0)) + cy + 0.5; //v = fy*Y/Z + cy
+	     
+	     if(row_u < 0.1 || col_v < 0.1 || (row_u+1) > imrows || (col_v+1) > imcols){
+	       continue;
+	    }
+
+	    float KeyFrameWeight = (float)iter->second.depthweightinfoc.at<uint8_t>(row_u, col_v);
+
+	    float KeyFrameDepth = ((float)input_raw_depth_image_copy_.at<int16_t>(row_u, col_v))/1000.0;
+
+	    if(KeyFrameDepth<0.005){
+	      continue;
+	    }
+	    
+	    if(KeyFrameWeight > 0 && count < 10){
+	      cout << "KeyFrameWeight: 198: " << KeyFrameWeight << endl;
+	      count ++;
+	    }
+	    
+ 	    input_raw_depth_image_copy_.at<int16_t>(row_u,col_v) = (int16_t) (1000 * (KeyFrameWeight + 1.0) / ( KeyFrameWeight/KeyFrameDepth + 1.0/depth_curr_keyframe_coord.at<float>(2,0)));
+            iter->second.depthweightinfoc.at<uint8_t>(row_u, col_v) = (uint8_t) (KeyFrameWeight + 1.0);
+	  }
+	}
+      }
+      cout << "DenseSlam 182: " << endl;
+      iter->second.depthinfoc = input_raw_depth_image_copy_.clone();
+//       iter->second.depthweightinfoc = input_weight_copy_.clone();
+      cout << "DenseSlam 189: " << iter->second.depthweightinfoc << endl;
       //删除mframeDataBase和iter中间所有的元素
       mframeDataBase.erase(mframeDataBase.begin(), iter);
+      cout << "DenseSlam 192: " << endl;
+      orbslam_static_scene_->GetgetFrameDataInfo()->erase(orbslam_static_scene_->GetgetFrameDataInfo()->begin(), iter1);
     }
     else{
 	 return;
     }
   }
-  orbSLAM2_Pose = mcurrBAKeyframe->GetPoseInverse();
-  
+  utils::Toc();
+
     /// NOTE 如果是第一帧，则创建子地图，设置创建的子地图基于世界坐标系的位姿，这部分代码主要用于多子图的构建
   if(first_frame || shouldCreateNewLocalMap){
     int currentLocalMapIdx = static_scene_->GetMapManager()->createNewLocalMap();

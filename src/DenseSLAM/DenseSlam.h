@@ -67,6 +67,20 @@ struct mapKeyframeInfo{
      cv::Mat poseinfok;
 };
 
+struct currFrameInfo{
+     currFrameInfo(cv::Mat pose, cv::Mat3b rgb, cv::Mat1s depth, cv::Mat depthweight)
+                  :poseinfoc(pose), 
+                  rgbinfoc(rgb), 
+                  depthinfoc(depth),
+                  depthweightinfoc(depthweight){}
+                  
+     currFrameInfo(void) {}
+     cv::Mat depthweightinfoc;
+     cv::Mat poseinfoc;
+     cv::Mat3b rgbinfoc;
+     cv::Mat1s depthinfoc;
+};
+
 class DenseSlam {
  public:
   DenseSlam(InfiniTamDriver *itm_static_scene_engine,
@@ -388,7 +402,8 @@ public:
   bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
   
   int createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose);
-  map<double, std::pair<cv::Mat3b, cv::Mat1s>> mframeDataBase;
+//   map<double, std::pair<cv::Mat3b, cv::Mat1s>> mframeDataBase;
+  map<double, currFrameInfo> mframeDataBase;
   
   //融合帧的timestamp,位姿，RGB信息和深度图
   map<double, fusionFrameInfo> mfusionFrameDataBase;
@@ -425,6 +440,7 @@ private:
   
   cv::Mat3b input_rgb_image_copy_;
   cv::Mat1s input_raw_depth_image_copy_;
+  cv::Mat input_weight_copy_;
   
   int current_frame_no_ = 0;
   int current_keyframe_no_ = 1;
