@@ -26,15 +26,17 @@ bool Input::HasMoreImages() {
   string next_fpath = "";
   if(mDatasetType == KITTI){
     next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx_int);
+    cout << "next_fpath: 29" << next_fpath << endl;
   }
   else if(mDatasetType == TUM){
-    next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx_pair.first);
+    double frame_idx = atof(frame_idx_pair.first.c_str());
+    next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx);
   }
   else if(mDatasetType == ICLNUIM){
     next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx_int);
   }
   else{
-    runtime_error("Currently Unspported dataset type !");
+    throw runtime_error("Currently Unspported dataset type !");
   }
   bool fileExists = utils::FileExists(next_fpath);
   if(!fileExists){
@@ -51,7 +53,8 @@ bool Input::ReadNextFrame() {
     currentFrameTimeStamp = (double)frame_idx_int;
   }
   else if(mDatasetType == TUM){
-    ReadLeftColor(frame_idx_pair.first, left_frame_color_buf_);
+    double frame_idx = atof(frame_idx_pair.first.c_str());
+    ReadLeftColor(frame_idx, left_frame_color_buf_);
     string tempString = frame_idx_pair.first;
     std::istringstream ss(tempString);
     ss >> currentFrameTimeStamp;
@@ -62,9 +65,18 @@ bool Input::ReadNextFrame() {
     currentFrameTimeStamp = (double)frame_idx_int;
   }
   else{
-    runtime_error("Currently Unspported dataset type !");
+    throw runtime_error("Currently Unspported dataset type !");
   }
   const auto &rgb_size = GetRgbSize();
+  
+  if(left_frame_color_buf_.rows != rgb_size.height || left_frame_color_buf_.cols != rgb_size.width){
+     int u_coner = (left_frame_color_buf_.cols - rgb_size.width)/2.0;
+     int v_coner = left_frame_color_buf_.rows - rgb_size.height;
+     cv::Rect rect(u_coner, v_coner, rgb_size.width, rgb_size.height);
+     left_frame_color_buf_ = left_frame_color_buf_(rect);
+  }
+  
+  
   if (left_frame_color_buf_.rows != rgb_size.height || left_frame_color_buf_.cols != rgb_size.width) {
     cerr << "Unexpected left RGB frame size. Got " << left_frame_color_buf_.size() << ", but the "
          << "calibration file specified " << rgb_size << "." << endl;
@@ -78,14 +90,23 @@ bool Input::ReadNextFrame() {
        ReadRightColor(frame_idx_int, right_frame_color_buf_);
     }
     else if(mDatasetType == TUM){
-       ReadRightColor(frame_idx_pair.first, right_frame_color_buf_);
+       double frame_idx = atof(frame_idx_pair.first.c_str());
+       ReadRightColor(frame_idx, right_frame_color_buf_);
     }
     else if(mDatasetType == ICLNUIM){
        ReadRightColor(frame_idx_int, right_frame_color_buf_);
     }
     else{
-       runtime_error("Unspporte frame_idx type !");
+       throw runtime_error("Unspporte frame_idx type !");
     }
+    
+    if(right_frame_color_buf_.rows != rgb_size.height || right_frame_color_buf_.cols != rgb_size.width){
+       int u_coner = (right_frame_color_buf_.cols - rgb_size.width)/2.0;
+       int v_coner = right_frame_color_buf_.rows - rgb_size.height;
+       cv::Rect rect(u_coner, v_coner, rgb_size.width, rgb_size.height);
+       right_frame_color_buf_ = right_frame_color_buf_(rect);
+     }
+     
      // Sanity checks to ensure the dimensions from the calibration file and the actual image dimensions correspond.
      if (right_frame_color_buf_.rows != rgb_size.height || right_frame_color_buf_.cols != rgb_size.width) {
         cerr << "Unexpected right RGB frame size. Got " << right_frame_color_buf_.size() << ", but the calibration file specified " << rgb_size << "." << endl;
@@ -95,29 +116,18 @@ bool Input::ReadNextFrame() {
   }
   
   cv::Mat1s &depth_out = (input_scale_ != 1.0f) ? depth_buf_small_ : depth_buf_;
-  if(mSensor==Input::STEREO){
-    utils::Tic("Depth from stereo");
-    /// @brief 其实这里就是直接从disk中读取的
-    depth_provider_->DepthFromStereo(left_frame_color_buf_,
-                                     right_frame_color_buf_,
-                                     stereo_calibration_,
-                                     depth_out,
-                                     input_scale_);
+  if(mDatasetType == KITTI){
+       depth_provider_->GetDepth(frame_idx_int, stereo_calibration_, depth_out, input_scale_);
+  }
+  else if(mDatasetType == TUM){
+       double frame_idx = atof(frame_idx_pair.second.c_str());
+       depth_provider_->GetDepth(frame_idx, stereo_calibration_, depth_out, input_scale_);
+  }
+  else if(mDatasetType == ICLNUIM){
+      depth_provider_->GetDepth(frame_idx_int, stereo_calibration_, depth_out, input_scale_);
   }
   else{
-    utils::Tic("Depth from Disk Image");
-    if(mDatasetType == KITTI){
-       depth_provider_->GetDepth(frame_idx_int, stereo_calibration_, depth_out, input_scale_);
-    }
-    else if(mDatasetType == TUM){
-       depth_provider_->GetDepth(frame_idx_pair.second, stereo_calibration_, depth_out, input_scale_);
-    }
-    else if(mDatasetType == ICLNUIM){
-       depth_provider_->GetDepth(frame_idx_int, stereo_calibration_, depth_out, input_scale_);
-    }
-    else{
-       runtime_error("Unspporte frame_idx type !");
-    }
+      throw runtime_error("Unspporte frame_idx type !");
   }
   if (input_scale_ != 1.0f) {
     cv::resize(depth_buf_small_,
@@ -127,9 +137,16 @@ bool Input::ReadNextFrame() {
                1.0 / input_scale_,
                cv::INTER_NEAREST);
   }
-  utils::Toc();
 
   const auto &depth_size = GetDepthSize();
+  
+  if(depth_buf_.rows != depth_size.height || depth_buf_.cols != depth_size.width){
+     int u_coner = (depth_buf_.cols - depth_size.width)/2.0;
+     int v_coner = depth_buf_.rows - depth_size.height;
+     cv::Rect rect(u_coner, v_coner, depth_size.width, depth_size.height);
+     depth_buf_ = depth_buf_(rect);
+  }
+  
   if (depth_buf_.rows != depth_size.height || depth_buf_.cols != depth_size.width) {
     cerr << "Unexpected depth map size. Got " << depth_buf_.size() << ", but the calibration file specified " << depth_size << "." << endl;
     cerr << "Was using format [" << config_.depth_fname_format << "] in dir ["
@@ -145,7 +162,9 @@ bool Input::ReadNextFrame() {
   return true;
 }
 
-
+void Input::GetRightColor(cv::Mat3b **rgb){
+  *rgb = &right_frame_color_buf_;
+}
 
 void Input::GetCvImages(cv::Mat3b **rgb, cv::Mat1s **raw_depth) {
   *rgb = &left_frame_color_buf_;
@@ -200,33 +219,6 @@ void Input::ReadRightColor(T frame_idx, cv::Mat3b &out) const {
                                           config_.right_color_folder,
                                           config_.fname_format,
                                           frame_idx));
-  cv::resize(buf, out, cv::Size(), 1 / input_scale_, 1 / input_scale_, cv::INTER_NEAREST);
-}
-
-/// To do this more clear
-void Input::GetRightColor(cv::Mat3b &out) const {
-  cv::Mat3b buf;
-  if(GetDatasetType()==KITTI){
-    buf = cv::imread(GetFrameName(dataset_folder_,
-                                            config_.right_color_folder,
-                                            config_.fname_format,
-                                            frame_idx_int));
-  }
-  else if(GetDatasetType()==TUM){
-    buf = cv::imread(GetFrameName(dataset_folder_,
-                                  config_.right_color_folder,
-                                  config_.fname_format,
-                                  frame_idx_pair.first));
-  }
-  else if(GetDatasetType() == ICLNUIM){
-    buf = cv::imread(GetFrameName(dataset_folder_,
-                                            config_.right_color_folder,
-                                            config_.fname_format,
-                                            frame_idx_int));
-  }
-  else{
-    runtime_error("Currently unspported type !");
-  }
   cv::resize(buf, out, cv::Size(), 1 / input_scale_, 1 / input_scale_, cv::INTER_NEAREST);
 }
 

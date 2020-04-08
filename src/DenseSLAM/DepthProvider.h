@@ -37,54 +37,16 @@ class DepthProvider {
   DepthProvider& operator=(const DepthProvider&) = default;
   DepthProvider& operator=(DepthProvider&&) = default;
   virtual ~DepthProvider() = default;//虚析构构造函数
-
-  /// \brief 从双目图像中计算深度图（Stereo->disparity->depth）
-  void DepthFromStereo(const cv::Mat &left,
-                               const cv::Mat &right,
-                               const StereoCalibration &calibration,
-                               cv::Mat1s &out_depth,
-                               float scale
-  ) {
-    if (input_is_depth_) {
-      // NOTE 若input_is_depth_为true,则DisparityMapFromStereo的out为深度图，反之视差图，若为视差图，则需要进行
-         DisparityOrDepthMapFromStereo(left, right, out_depth);
-      return;
-    }
-
-    // 先计算视差图，再计算深度
-    DisparityOrDepthMapFromStereo(left, right, out_disparity_);
-
-    // out_disparity_为视差图
-    if (out_disparity_.type() == CV_32FC1) {
-       DepthFromDisparityMap<float>(out_disparity_, calibration, out_depth, scale);
-    } 
-    else if (out_disparity_.type() == CV_16SC1) {
-      throw std::runtime_error("Cannot currently convert int16_t disparity to depth.");
-    } 
-    else {
-      throw std::runtime_error(utils::Format(
-          "Unknown data type for disparity matrix [%s]. Supported are CV_32FC1 and CV_16SC1.",
-          utils::Type2Str(out_disparity_.type()).c_str()
-      ));
-    }
-  }
-
-  /// \brief 从双目图像中计算视差图
-  virtual void DisparityOrDepthMapFromStereo(const cv::Mat &left,
-                                      const cv::Mat &right,
-                                      cv::Mat &out_disparity) = 0; //将在PrecomputedDepthProvider进行实现
+  
                                       
   virtual void GetDepth(int frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale) = 0;
-  virtual void GetDepth(std::string frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale) = 0;
+  virtual void GetDepth(double frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale) = 0;
 
   /// \brief 将视差图转为深度图，单位为m，d=baseline*fx/disparity
   float DepthFromDisparity(const float disparity_px, const StereoCalibration &calibration) {
-	     return calibration.focal_length_px * calibration.baseline_meters / disparity_px;
+	return calibration.focal_length_px * calibration.baseline_meters / disparity_px;
   };
 				   
-  /// \brief The name of the technique being used for depth estimation.
-  virtual const std::string &GetName() const = 0;
-
   /// @brief 使用'DepthFromDisparity'函数从视差图计算深度图，应该可以用CUDA进行加速才对
   /// @param T 输入的视差图的类型
   /// @param disparity 视差图

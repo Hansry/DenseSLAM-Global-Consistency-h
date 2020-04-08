@@ -76,24 +76,24 @@ public:
   static Config KittiOdometryConfig() {
     Config config;
     config.dataset_name           = "kitti-odometry";
-    config.left_gray_folder       = "image_0";
-    config.right_gray_folder      = "image_1";
-    config.left_color_folder      = "image_2";
-    config.right_color_folder     = "image_3";
-    config.fname_format           = "%06d.png";
-    config.calibration_fname      = "calib.txt";
+    config.left_gray_folder       = "image_00/data";
+    config.right_gray_folder      = "image_01/data";
+    config.left_color_folder      = "image_02/data";
+    config.right_color_folder     = "image_03/data";
+    config.fname_format           = "%010d.png";
+    config.calibration_fname      = "orbslam_param.yaml";
 
     config.min_depth_m            =  0.5f;
-    config.max_depth_m            = 30.0f;
-    config.depth_folder           = "precomputed-depth/Frames";
-    config.depth_fname_format     = "%04d.xml";
+    config.max_depth_m            = 40.0f;
+    config.depth_folder           = "precomputed-depth";
+    config.depth_fname_format     = "%010d.png";
     config.read_depth             = true;
 
     config.odometry_oxts          = false;
     config.odometry_fname         = "ground-truth-poses.txt";
 
     config.velodyne_folder        = "velodyne";
-    config.velodyne_fname_format  = "%06d.bin";
+    config.velodyne_fname_format  = "%010d.bin";
     config.frame_timestamp= "";
 
     return config;
@@ -102,7 +102,7 @@ public:
   static Config KittiOdometryDispnetConfig() {
     Config config                 = KittiOdometryConfig();
     config.depth_folder           = "precomputed-depth-dispnet";
-    config.depth_fname_format     = "%06d.pfm";
+    config.depth_fname_format     = "%010d.pfm";
     config.read_depth             = false;
     
     return config;
@@ -116,7 +116,7 @@ public:
     config.left_color_folder   = "rgb";
     config.right_gray_folder   = "";
     config.fname_format        = "%17f.png";   
-    config.calibration_fname   = "calib.txt";
+    config.calibration_fname   = "orbslam_param.yaml";
     
     config.min_depth_m         = 0.001f;
     config.max_depth_m         = 30.0f;
@@ -144,7 +144,7 @@ public:
     config.left_color_folder   = "rgb";
     config.right_gray_folder   = "";
     config.fname_format        = "%d.png";   
-    config.calibration_fname   = "calib.txt";
+    config.calibration_fname   = "orbslam_param.yaml";
     
     config.min_depth_m         = 0.001f;
     config.max_depth_m         = 30.0f;
@@ -285,7 +285,7 @@ public:
     return mSensor;
   }
   
-  void GetRightColor(cv::Mat3b &out) const;
+  void GetRightColor(cv::Mat3b **rgb);
   
   eDatasetType GetDatasetType() const{
     return mDatasetType;
@@ -339,7 +339,6 @@ public:
 
   template<typename T>
   static std::string GetFrameName(const std::string &root, const std::string &folder, const std::string &fname_format, T frame_idx) {
-    std::string tempPath = root + "/" + folder + "/" + utils::Format(fname_format, frame_idx);
     return root + "/" + folder + "/" + utils::Format(fname_format, frame_idx);
   }
  

@@ -44,17 +44,19 @@ struct TodoListEntry {
 };
 
 struct fusionFrameInfo{
-     fusionFrameInfo(cv::Mat pose, cv::Mat3b rgb, cv::Mat1s depth, short flag)
+     fusionFrameInfo(cv::Mat pose, cv::Mat3b rgb, cv::Mat1s depth, short flag, cv::Mat depthweight)
                   :poseinfo(pose), 
                   rgbinfo(rgb), 
                   depthinfo(depth),
-                  flaginfo(flag){}
+                  flaginfo(flag),
+		  depthweightinfo(depthweight){}
                   
      fusionFrameInfo(void) {}
      cv::Mat poseinfo;
      cv::Mat3b rgbinfo;
      cv::Mat1s depthinfo;
      short flaginfo;
+     cv::Mat depthweightinfo;
 };
 
 struct mapKeyframeInfo{
@@ -68,17 +70,15 @@ struct mapKeyframeInfo{
 };
 
 struct currFrameInfo{
-     currFrameInfo(cv::Mat pose, cv::Mat3b rgb, cv::Mat1s depth, cv::Mat depthweight)
-                  :poseinfoc(pose), 
-                  rgbinfoc(rgb), 
+     currFrameInfo(cv::Mat3b rgb, cv::Mat1s depth, cv::Mat depthweight)
+                  :rgbinfoc(rgb), 
                   depthinfoc(depth),
                   depthweightinfoc(depthweight){}
                   
      currFrameInfo(void) {}
-     cv::Mat depthweightinfoc;
-     cv::Mat poseinfoc;
      cv::Mat3b rgbinfoc;
      cv::Mat1s depthinfoc;
+     cv::Mat depthweightinfoc;
 };
 
 class DenseSlam {
@@ -88,7 +88,6 @@ class DenseSlam {
           SparseSFProvider *sparse_sf_provider,
           const Vector2i &input_shape,
           const Eigen::Matrix34f& proj_left_rgb,
-          const Eigen::Matrix34f& proj_right_rgb,
           float stereo_baseline_m,
           bool enable_direct_refinement,
           int fusion_every,
@@ -106,7 +105,6 @@ class DenseSlam {
       input_height_(input_shape.y),
       pose_history_({ Eigen::Matrix4f::Identity() }),
       projection_left_rgb_(proj_left_rgb),
-      projection_right_rgb_(proj_right_rgb),
       stereo_baseline_m_(stereo_baseline_m),
       experimental_fusion_every_(fusion_every),
       new_local_min_age_(min_age)
@@ -168,9 +166,7 @@ public:
     return current_frame_no_;
   }
 
-  void SaveStaticMap(const std::string &dataset_name, const std::string &depth_name, const ITMLib::Engine::ITMLocalMap* currentLocalMap, int localMap_no) const;
-
-  void SaveDynamicObject(const std::string &dataset_name, const std::string &depth_name, int object_id) const;
+  void SaveStaticMap(const std::string &dataset_name, const ITMLib::Engine::ITMLocalMap* currentLocalMap, int localMap_no) const;
 
   // Variants would solve this nicely, but they are C++17-only... TODO(andrei): Use Option<>.
   // Will error out if no flow information is available.
@@ -237,9 +233,6 @@ public:
     return projection_left_rgb_;
   };
 
-  const Eigen::Matrix34f GetRightRgbProjectionMatrix() const {
-    return projection_right_rgb_;
-  };
 
   float GetStereoBaseline() const {
     return stereo_baseline_m_;
@@ -433,10 +426,12 @@ private:
   ITMUChar4Image *out_image_;
   ITMFloatImage *out_image_float_;
   cv::Mat3b *input_rgb_image_;
+  cv::Mat3b *input_right_rgb_image_;
   cv::Mat1s *input_raw_depth_image_;
   
   cv::Mat3b input_rgb_image_n;
   cv::Mat1s input_raw_depth_image_n;
+  cv::Mat3b input_right_rgb_image_n;
   
   cv::Mat3b input_rgb_image_copy_;
   cv::Mat1s input_raw_depth_image_copy_;
@@ -485,7 +480,6 @@ private:
   std::vector<Eigen::Matrix4f> pose_history_;
   /// \brief 归一化平面到像素平面？
   const Eigen::Matrix34f projection_left_rgb_;
-  const Eigen::Matrix34f projection_right_rgb_;
   const float stereo_baseline_m_;
 
   /// \brief Perform dense depth computation and dense fusion every K frames.

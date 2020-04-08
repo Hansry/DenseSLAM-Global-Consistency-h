@@ -36,13 +36,9 @@ class PrecomputedDepthProvider : public DepthProvider {
 
   ~PrecomputedDepthProvider() override = default;
 
-  void DisparityOrDepthMapFromStereo(const cv::Mat &left, const cv::Mat &right, cv::Mat &out_disparity) override;
-
   /// \brief Loads the precomputed depth map for the specified frame into 'out_depth'.
   void GetDepth(int frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale) override;
-  void GetDepth(std::string frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale) override;
- 
-  const std::string &GetName() const override;
+  void GetDepth(double frame_idx, StereoCalibration& calibration, cv::Mat1s& out_depth, float scale) override;
 
  protected:
   /// \brief Reads a disparity or depth (depending on the data).

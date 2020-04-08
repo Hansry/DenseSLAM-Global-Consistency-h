@@ -42,11 +42,11 @@ string Format(const string& fmt, ...) {
       break;
     }
   }
-
   return string(formatted.get());
 }
 
 // string Format(const string& fmt, string frame_idx){
+//   cout << "Utils.cpp: " << 49 << endl;
 //   return frame_idx + ".png";
 // }
 

@@ -112,7 +112,7 @@ void PangolinGui::Run(){
             // Good for odo 05
              pangolin::OpenGlMatrix::RotateY(M_PI * 0.5 * 0.05f) *
              pangolin::OpenGlMatrix::RotateX(M_PI * 0.5 * 0.03f) *
-             pangolin::OpenGlMatrix::Translate(-0.5, 1.0, 15.0) *
+             pangolin::OpenGlMatrix::Translate(-0.5, 2.0, 20.0) *
              pm;
 	}
 	else if(dense_slam_input_->GetDatasetType() == Input::TUM || dense_slam_input_->GetDatasetType() == Input::ICLNUIM){
@@ -138,9 +138,7 @@ void PangolinGui::Run(){
 // 	//diff_buffer为要填充的内存块，‘\0’为要被设置的值，sizeof(uchar)*width_*height_*4为要被设置为该值的字节数
 //         memset(diff_buffer, '\0', sizeof(uchar) * width_ * height_ * 4);
 
-        bool need_lidar = false;
         const unsigned char *preview = nullptr;
-        const uint delta_max_visualization = 1;
         string message;
         switch(current_lidar_vis_) {
           case kNone://
@@ -316,7 +314,6 @@ void PangolinGui::CreatePangolinDisplays(){
       }
       else {
         dense_slam_->SaveStaticMap(dense_slam_input_->GetDatasetIdentifier(),
-                                  dense_slam_input_->GetDepthProvider()->GetName(),
 				  dense_slam_->GetCurrentLocalMap(),
 				  dense_slam_->GetNumLocalMap());
         cout << "Mesh generated OK. Writing asynchronously to the disk..." << endl;
@@ -460,7 +457,7 @@ void PangolinGui::CreatePangolinDisplays(){
                       "Free GPU Memory (100 MB)",
 		      "Total GPU Memory (100 MB)",
 		      "Dense map allocated memory (100 MB)",
-                      "Dense map memory usage (10 MB)",
+                      "Dense map memory usage (100 MB)",
                      });
     
     // OpenGL 'view' of data such as the number of actively tracked instances over time.
@@ -475,8 +472,14 @@ void PangolinGui::CreatePangolinDisplays(){
     //detail_views:指的是static_rgb、 static_depth、 segment_view_、object_view
     //SetBounds(bottom, top, left, right)
     if(dense_slam_input_->GetDatasetType() == Input::KITTI){
-       main_view_->SetBounds(pangolin::Attach::Pix(height_ *2.0), pangolin::Attach::Pix(height_ * 3.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth*1.2+width_));
-       orbslam_view_->SetBounds(pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(height_ * 2.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
+       if(dense_slam_input_->GetDepthSize().width == 912){
+	  main_view_->SetBounds(pangolin::Attach::Pix(height_ *2.5), pangolin::Attach::Pix(height_ * 4.5), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth*1.2+width_));
+          orbslam_view_->SetBounds(pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(height_ * 2.5), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
+       }
+       else{
+          main_view_->SetBounds(pangolin::Attach::Pix(height_ *2.0), pangolin::Attach::Pix(height_ * 3.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth*1.2+width_));
+          orbslam_view_->SetBounds(pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(height_ * 2.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
+       }
        detail_views_->SetBounds(0.0, pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
        detail_views_->SetLayout(pangolin::LayoutEqual)
          .AddDisplay(rgb_view_)
@@ -510,8 +513,9 @@ void PangolinGui::CreatePangolinDisplays(){
 }
 
 void PangolinGui::ProcessFrame(){
-    cout << endl << "[Starting frame " << dense_slam_->GetCurrentFrameNo() + 1 << "]" << endl;
-    if (! dense_slam_input_->HasMoreImages() && dense_slam_input_->GetFrameIndex() > 980){
+    cout << endl << "[Starting frame " << dense_slam_->GetCurrentFrameNo() << "]" << endl;
+    bool hasMoreImages = dense_slam_input_->HasMoreImages();
+    if (!hasMoreImages && dense_slam_input_->GetFrameIndex() > 980){
       dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
       cout << "No more images, Bye!" << endl;
       
@@ -519,22 +523,19 @@ void PangolinGui::ProcessFrame(){
 	for(int mapNO = 0; mapNO < dense_slam_->todoList.size(); mapNO++){
 	  int mapNum = dense_slam_->todoList[mapNO].dataId;
 	  ITMLib::Engine::ITMLocalMap* currLocalMap = dense_slam_->GetStaticScene()->GetMapManager()->getLocalMap(mapNum);
-	  dense_slam_->SaveStaticMap(dense_slam_input_->GetDatasetIdentifier(), "depth", currLocalMap, mapNum);
+	  dense_slam_->SaveStaticMap(dense_slam_input_->GetDatasetIdentifier(), currLocalMap, mapNum);
 	}
       }
       getchar();
     }
-//     if (! dense_slam_input_->HasMoreImages() && paramGUI.close_on_complete) {
-//       dense_slam_->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
-//       cerr << "No more images, Bye!" << endl;
-//       pangolin::QuitAll();
-//       return;
-//     }
-      
+    
+    if(!hasMoreImages){
+      cout << "[Finished frame " << dense_slam_->GetCurrentFrameNo() << "]" << endl;
+      return;
+    }
     Tic("DenseSLAM frame");
     // Main workhorse function of the underlying SLAM system.
     dense_slam_->ProcessFrame(this->dense_slam_input_);
-    
     size_t free_gpu_memory_bytes;
     size_t total_gpu_memory_bytes;
     cudaMemGetInfo(&free_gpu_memory_bytes, &total_gpu_memory_bytes);
@@ -553,7 +554,7 @@ void PangolinGui::ProcessFrame(){
       static_cast<float>(free_gpu_gb) * 10.24f, 
       static_cast<float>(total_gpu_gb) * 10.24f,
       static_cast<float>(curr_LocalMap_allo_gpu_gb) * 10.24f, 
-      static_cast<float>(curr_LocalMap_used_gpu_gb) * 102.4f
+      static_cast<float>(curr_LocalMap_used_gpu_gb) * 10.24f
     );
     
     int orbslamTrackIntensity = dense_slam_->mTrackIntensity;
@@ -565,7 +566,7 @@ void PangolinGui::ProcessFrame(){
 
     int64_t frame_time_ms = Toc(true);
     float fps = 1000.0f / static_cast<float>(frame_time_ms);
-    cout << "[Finished frame " << dense_slam_->GetCurrentFrameNo() << " in " << frame_time_ms
+    cout << "[Finished frame " << dense_slam_->GetCurrentFrameNo()-1 << " in " << frame_time_ms
          << "ms @ " << setprecision(4) << fps << " FPS (approx.)]"
          << endl;
 }

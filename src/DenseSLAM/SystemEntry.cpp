@@ -17,8 +17,8 @@ DEFINE_string(strSettingFile, "", "the path to load the setting file for ORBSLAM
 DEFINE_int32(frame_offset, 0, "The frame index from which to start reading the dataset sequence.");
 DEFINE_int32(frame_limit, 0, "How many frames to process in auto mode. 0 = no limit.");
 DEFINE_bool(voxel_decay, true, "Whether to enable map regularization via voxel decay (a.k.a. voxel garbage collection).");
-DEFINE_int32(min_decay_age, 5, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection)."); //kitti: 5, ICLNUIM-lvn1: 8, ICLNUIM-else: 5
-DEFINE_int32(max_decay_weight, 0.01, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed."); //kitti: 2, ICLNUIM-lvn1: 1, ICLNUIM-else: 1
+DEFINE_int32(min_decay_age, 50, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection)."); //kitti: 5, ICLNUIM-lvn1: 8, ICLNUIM-else: 5
+DEFINE_int32(max_decay_weight, 10, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed."); //kitti: 2, ICLNUIM-lvn1: 1, ICLNUIM-else: 1
 DEFINE_int32(kitti_tracking_sequence_id, -1, "Used in conjunction with --dataset_type kitti-tracking.");
 DEFINE_bool(direct_refinement, false, "Whether to refine motion estimates for other cars computed sparsely with RANSAC using a semidense direct image alignment method.");
 // TODO-LOW(andrei): Automatically adjust the voxel GC params when depth weighting is enabled.
@@ -57,109 +57,25 @@ using namespace std;
 using namespace SparsetoDense;
 using namespace SparsetoDense::eval;
 using namespace SparsetoDense::utils;
-  
-Eigen::Matrix<double, 3, 4> ReadProjection(const string &expected_label, istream &in, double downscale_factor) {
-  Eigen::Matrix<double, 3, 4> matrix;
-  string label;
-  in >> label;
-  assert(expected_label == label && "Unexpected token in calibration file.");
 
-  for (int row = 0; row < 3; ++row) {
-    for (int col = 0; col < 4; ++col) {
-      in >> matrix(row, col);
-    }
-  }
-
-// The downscale factor is used to adjust the intrinsic matrix for low-res input.
-//  cout << "Adjusting projection matrix for scale [" << downscale_factor << "]." << endl;
-//  matrix *= downscale_factor;
-//  matrix(2, 2) = 1.0;
-
-  return matrix;
-};
 
 /// \brief Reads the projection and transformation matrices for a KITTI-odometry sequence.
 /// \note P0 = left-gray, P1 = right-gray, P2 = left-color, P3 = right-color
 /// 读取图片的内参
-void ReadKittiOdometryCalibration(const string &fpath,
+void ReadOdometryCalibration(const string &fpath,
                                   Eigen::Matrix<double, 3, 4> &left_gray_proj,
-                                  Eigen::Matrix<double, 3, 4> &right_gray_proj,
-                                  Eigen::Matrix<double, 3, 4> &left_color_proj,
-                                  Eigen::Matrix<double, 3, 4> &right_color_proj,
-                                  Eigen::Matrix4d &velo_to_left_cam,
+			          Eigen::Vector2i &frame_size,
                                   double downscale_factor) {
-  static const string kLeftGray = "P0:";
-  static const string kRightGray = "P1:";
-  static const string kLeftColor = "P2:";
-  static const string kRightColor = "P3:";
-  ifstream in(fpath);
-  if (! in.is_open()) {
-    throw runtime_error(SparsetoDense::utils::Format("Could not open calibration file: [%s]", fpath.c_str()));
+  cv::FileStorage calib(fpath.c_str(), cv::FileStorage::READ);
+  if(!calib.isOpened()){
+     throw runtime_error(SparsetoDense::utils::Format("Could not open calibration file: [%s]", fpath.c_str()));
   }
-
-  //将相机的参数保存成Matrix形式
-  left_gray_proj = ReadProjection(kLeftGray, in, downscale_factor);
-  right_gray_proj = ReadProjection(kRightGray, in, downscale_factor);
-  left_color_proj = ReadProjection(kLeftColor, in, downscale_factor);
-  right_color_proj = ReadProjection(kRightColor, in, downscale_factor);
-
-  string dummy;
-  in >> dummy;
-  if (dummy != "Tr:") {
-    // Looks like a kitti-tracking sequence
-    std::getline(in, dummy); // skip to the end of current line
-
-    in >> dummy;
-    assert(dummy == "Tr_velo_cam");
-  }
-
-  for (int row = 0; row < 3; ++row) {
-    for (int col = 0; col < 4; ++col) {
-      in >> velo_to_left_cam(row, col);
-    }
-  }
-  velo_to_left_cam(3, 0) = 0.0;
-  velo_to_left_cam(3, 1) = 0.0;
-  velo_to_left_cam(3, 2) = 0.0;
-  velo_to_left_cam(3, 3) = 1.0;
-}
-
-void ReadTUMOdometryCalibration(const string &fpath,
-                                Eigen::Matrix<double,3,4> &left_gray_proj,
-				double downscale_factor){
-	static const string kLeftColor = "RGB:";
-	ifstream in(fpath);
-	if(! in.is_open()){
-	  throw runtime_error(SparsetoDense::utils::Format("Could not open calibration file: [%s]", fpath.c_str()));
-	}
-        left_gray_proj = ReadProjection(kLeftColor, in, downscale_factor);			  
-}
-
-/// \brief Probes a dataset folder to find the frame dimentsions.
-/// \note This is useful for pre-allocating buffers in the rest of the pipeline.
-/// \returns A (width, height), i.e., (cols, rows)-style dimension.
-/// 返回图像的大小
-Eigen::Vector2i GetFrameSize(const string &dataset_root, const Input::Config &config) {
-  string lc_folder = dataset_root + "/" + config.left_color_folder;
-  DIR *pDir;
-  struct dirent* ptr;
-  if(!(pDir = opendir(lc_folder.c_str()))){
-    runtime_error("folder doesnt't exist in GetFRameSize image");
-  }
-  std::string fileName = "";
-  while((ptr = readdir(pDir)) != 0){
-    if(strcmp(ptr->d_name, ".") != 0 && strcmp(ptr->d_name, "..") != 0){
-      fileName = ptr->d_name;
-      break;
-    }
-  }
-  stringstream lc_fpath_ss;
-  lc_fpath_ss << lc_folder << "/" << fileName;
-  cv::Mat frame = cv::imread(lc_fpath_ss.str());
-  return Eigen::Vector2i(
-      frame.cols * 1.0f / FLAGS_scale,
-      frame.rows * 1.0f / FLAGS_scale
-  );
+  
+  left_gray_proj << calib["Camera.fx"],        0.0,         calib["Camera.cx"], 0.0,
+                           0.0,        calib["Camera.fy"],  calib["Camera.cy"], 0.0,
+                           0.0,                0.0,               1.0,          0.0;
+			   
+  frame_size << calib["Camera.width"], calib["Camera.height"];
 }
 
 /// \brief Constructs a DynSLAM instance to run on a KITTI Odometry dataset sequence, using liviso2
@@ -179,9 +95,9 @@ void BuildDenseSlamOdometry(const string &dataset_root,
   float downscale_factor_f = static_cast<float>(downscale_factor);//强制转换为float类型
 
   //当使用深度的时候，会偏向于使用use_dispnet
-  if(sensor_type == Input::STEREO){
-    FLAGS_use_dispnet = true; 
-  }
+//   if(sensor_type == Input::STEREO){
+//     FLAGS_use_dispnet = true; 
+//   }
   //Odometry 判断是否使用Dispnet以及设置保存深度图文件夹的名称
   if(dataset_type == Input::KITTI){
      if (FLAGS_use_dispnet) {
@@ -193,55 +109,35 @@ void BuildDenseSlamOdometry(const string &dataset_root,
   }
   else if(dataset_type == Input::TUM){
     input_config = Input::TUMOdometryConfig();
-//     FLAGS_chase_cam = true;
   }
   else if(dataset_type == Input::ICLNUIM){
     input_config = Input::ICLNUIMOdometryConfig();
-//     FLAGS_chase_cam = true;
   }
   else {
     runtime_error("Unspported dataset type!");
   }
 
   ///这里的参数用于KITTI
-  Eigen::Matrix34d left_gray_proj;
-  Eigen::Matrix34d right_gray_proj;
   Eigen::Matrix34d left_color_proj;
-  Eigen::Matrix34d right_color_proj;
-  Eigen::Matrix4d velo_to_left_gray_cam;//雷达到灰度相机0的转换关系
-
-  // 读取图片的大小，方便为后面分配内存
-  Eigen::Vector2i frame_size = GetFrameSize(dataset_root, input_config);
+  Eigen::Vector2i frame_size;
+  
   if(dataset_type == SparsetoDense::Input::KITTI){
-     // ReadKittiOdometryCalibration读取各个相机的内参以及雷达到灰度相机0的转换关系,挺重要的这里
-     ReadKittiOdometryCalibration(dataset_root + "/" + input_config.calibration_fname,
-                                  left_gray_proj, right_gray_proj, left_color_proj, right_color_proj,
-                                  velo_to_left_gray_cam, downscale_factor);
+     // ReadKittiOdometryCalibration读取各个相机的内参,以及读取图片的大小，方便为后面分配内存
+     ReadOdometryCalibration(dataset_root + "/" + input_config.calibration_fname,
+                                  left_color_proj, frame_size, downscale_factor);
 
      cout << "Read calibration from KITTI-style data..." << endl
           << "Frame size: " << frame_size << endl
-          << "Proj (left, gray): " << endl << left_gray_proj << endl
-          << "Proj (right, gray): " << endl << right_gray_proj << endl
-          << "Proj (left, color): " << endl << left_color_proj << endl
-          << "Proj (right, color): " << endl << right_color_proj << endl
-          << "Velo: " << endl << velo_to_left_gray_cam << endl;
+          << "Proj: " << endl << left_color_proj << endl;
   }
   else if(dataset_type == SparsetoDense::Input::TUM){
-      ReadTUMOdometryCalibration(dataset_root + "/" + input_config.calibration_fname, left_color_proj, downscale_factor);
-      left_gray_proj = left_color_proj;
-      right_gray_proj = left_color_proj;
-      right_color_proj = left_color_proj;
-      velo_to_left_gray_cam.setOnes();
+      ReadOdometryCalibration(dataset_root + "/" + input_config.calibration_fname, left_color_proj, frame_size, downscale_factor);
       cout << "Read calibration from TUM data..." << endl
            << "Frame size: " << frame_size << endl
 	   << "Proj: " << endl << left_color_proj << endl;
   }
   else if(dataset_type == SparsetoDense::Input::ICLNUIM){
-      ReadTUMOdometryCalibration(dataset_root + "/" + input_config.calibration_fname, left_color_proj, downscale_factor);
-      left_gray_proj = left_color_proj;
-      right_gray_proj = left_color_proj;
-      right_color_proj = left_color_proj;
-      velo_to_left_gray_cam.setOnes();
+      ReadOdometryCalibration(dataset_root + "/" + input_config.calibration_fname, left_color_proj, frame_size, downscale_factor);
       cout << "Read calibration from ICL-NUIM data..." << endl
            << "Frame size: " << frame_size << endl
 	   << "Proj: " << endl << left_color_proj << endl;
@@ -261,7 +157,7 @@ void BuildDenseSlamOdometry(const string &dataset_root,
   
   //基线
   float baseline_m = 0.537150654273f;
-  float focal_length_px = left_gray_proj(0, 0);
+  float focal_length_px = left_color_proj(0, 0);
   
   //depth = baseline*fx/disparity
   StereoCalibration stereo_calibration(baseline_m, focal_length_px);
@@ -278,20 +174,15 @@ void BuildDenseSlamOdometry(const string &dataset_root,
       frame_offset,
       downscale_factor);
   
-  if(sensor_type == Input::STEREO){
-    input_config.read_depth = false; //读取的是视差图，需要将其转成深度图
-  }
-  else{
-    if(FLAGS_use_dispnet){
-       input_config.read_depth = false; //直接读取的是深度
-    }
-    else{
-       input_config.read_depth = true; //直接读取的是深度图
-    }
 
-  }
+   if(FLAGS_use_dispnet){
+      input_config.read_depth = false; //直接读取的是深度
+   }
+   else{
+      input_config.read_depth = true; //直接读取的是深度图
+   }
   
-  FLAGS_strSettingFile = dataset_root + "/orbslam_param.yaml";
+  FLAGS_strSettingFile = dataset_root + "/" + input_config.calibration_fname;
   //通过预测深度，可以通过从disk读取，也可以实时进行计算
   DepthProvider *depth = new PrecomputedDepthProvider(
       *input_out,
@@ -363,7 +254,6 @@ void BuildDenseSlamOdometry(const string &dataset_root,
       sparse_sf_provider,
       input_shape,
       left_color_proj.cast<float>(),
-      right_color_proj.cast<float>(),
       baseline_m,
       FLAGS_direct_refinement,
       FLAGS_fusion_every,

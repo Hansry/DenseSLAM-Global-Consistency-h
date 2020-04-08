@@ -40,7 +40,6 @@ ORUtils::Vector4<T> ToItmVec(const cv::Vec<T, 4> in) {
   return ORUtils::Vector4<T>(in[0], in[1], in[2], in[3]);
 }
 
-// TODO(andrei): Make */& more consistent.
 ITMLib::Objects::ITMRGBDCalib ReadITMCalibration(const std::string &fpath);
 //ITMLib::Objects::ITMRGBDCalib ReadITMCalibration(const string &fpath);
 
@@ -81,8 +80,6 @@ ITMLib::Objects::ITMRGBDCalib* CreateItmCalib(
 /// \brief DenseSLAM和InfiniTAM的接口
 class InfiniTamDriver : public ITMLib::Engine::ITMMainEngine{
 public:
-  // TODO-LOW(andrei): We may need to add another layer of abstraction above the drivers to get the
-  // best modularity possible (driver+input+custom settings combos).
   
   InfiniTamDriver(  //InfiniTamDriver的构造函数
       const ITMLib::Objects::ITMLibSettings *settings,
@@ -238,8 +235,8 @@ public:
 
   Eigen::Matrix4f GetLocalMapPose(const ITMLocalMap* currentLocalMap) const{
       Matrix4f Tw_LocalMap = currentLocalMap->estimatedGlobalPose.GetInvM();
-      return ItmToEigen(currentLocalMap->trackingState->pose_d->GetInvM());
-//       return ItmToEigen( Tw_LocalMap * (currentLocalMap->trackingState->pose_d->GetInvM()));
+//       return ItmToEigen(currentLocalMap->trackingState->pose_d->GetInvM());
+      return ItmToEigen( Tw_LocalMap * (currentLocalMap->trackingState->pose_d->GetInvM()));
   }
   
   /// \brief 返回前一帧到当前帧的变换， transform of from previous to current 
