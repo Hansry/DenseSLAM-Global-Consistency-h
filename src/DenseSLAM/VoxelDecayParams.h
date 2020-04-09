@@ -16,6 +16,23 @@ struct VoxelDecayParams {
       : enabled(enabled), min_decay_age(min_decay_age), max_decay_weight(max_decay_weight) {}
 };
 
+struct OnlineCorrectionParams {
+  bool enabled;
+  int CorrectionNum;
+  
+  OnlineCorrectionParams(bool enabled, int CorrectionNum) 
+        : enabled(enabled), CorrectionNum(CorrectionNum) {}
+};
+
+struct PostPocessParams{
+  bool enabled;
+  float filterThreshold;
+  float filterArea;
+  
+  PostPocessParams(bool enabled, float filterThreshold, float filterArea)
+       : enabled(enabled), filterThreshold(filterThreshold), filterArea(filterArea) {}
+};
+
 } //namespace SparsetoDense
 
 #endif //DENSESLAM_VOXELDECAYPARAMS_H

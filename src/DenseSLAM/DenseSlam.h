@@ -70,31 +70,32 @@ struct mapKeyframeInfo{
 };
 
 struct currFrameInfo{
-     currFrameInfo(cv::Mat3b rgb, cv::Mat1s depth, cv::Mat depthweight)
+     currFrameInfo(cv::Mat3b rgb, cv::Mat1s depth, cv::Mat depthweight, double timestamp)
                   :rgbinfoc(rgb), 
                   depthinfoc(depth),
-                  depthweightinfoc(depthweight){}
+                  depthweightinfoc(depthweight),
+                  timestampinfoc(timestamp){}
                   
      currFrameInfo(void) {}
      cv::Mat3b rgbinfoc;
      cv::Mat1s depthinfoc;
      cv::Mat depthweightinfoc;
+     double timestampinfoc;
 };
 
 class DenseSlam {
  public:
   DenseSlam(InfiniTamDriver *itm_static_scene_engine,
 	  ORB_SLAM2::drivers::OrbSLAMDriver *orb_static_engine,
-          SparseSFProvider *sparse_sf_provider,
           const Vector2i &input_shape,
           const Eigen::Matrix34f& proj_left_rgb,
-          float stereo_baseline_m,
+          float stereo_baseline_mm,
           bool enable_direct_refinement,
-          int fusion_every,
-	  int min_age)
+          PostPocessParams post_processing,
+	  OnlineCorrectionParams online_correction,
+	  bool use_orbslam_vo)
     : static_scene_(itm_static_scene_engine),
       orbslam_static_scene_(orb_static_engine),
-      sparse_sf_provider_(sparse_sf_provider),
       // Allocate the ITM buffers on the CPU and on the GPU (true, true).
       out_image_(new ITMUChar4Image(input_shape, true, true)),
       out_image_float_(new ITMFloatImage(input_shape, true, true)),
@@ -105,9 +106,10 @@ class DenseSlam {
       input_height_(input_shape.y),
       pose_history_({ Eigen::Matrix4f::Identity() }),
       projection_left_rgb_(proj_left_rgb),
-      stereo_baseline_m_(stereo_baseline_m),
-      experimental_fusion_every_(fusion_every),
-      new_local_min_age_(min_age)
+      stereo_baseline_mm_(stereo_baseline_mm),
+      online_correction(online_correction),
+      post_processing(post_processing),
+      use_orbslam_vo(use_orbslam_vo)
   {
       mFeatures_ = ExtractKeyPointNum();
       mGoalFeatures_ = 0.5 * mFeatures_;
@@ -167,12 +169,6 @@ public:
   }
 
   void SaveStaticMap(const std::string &dataset_name, const ITMLib::Engine::ITMLocalMap* currentLocalMap, int localMap_no) const;
-
-  // Variants would solve this nicely, but they are C++17-only... TODO(andrei): Use Option<>.
-  // Will error out if no flow information is available.
-  const SparseSceneFlow& GetLatestFlow() {
-    return sparse_sf_provider_->GetFlow();
-  }
 
   /// \brief Returns the most recent egomotion computed by the primary tracker.
   /// Composing these transforms from the first frame is equivalent to the `GetPose()` method, which 
@@ -235,10 +231,14 @@ public:
 
 
   float GetStereoBaseline() const {
-    return stereo_baseline_m_;
+    return stereo_baseline_mm_;
   }
   
-   Eigen::Matrix4f MatrixDoubleToFloat(Eigen::Matrix4d Eig_matrix){
+  bool OnlineCorrection();
+  
+  bool depthPostProcessing(double currBAKFTime);
+  
+  Eigen::Matrix4f MatrixDoubleToFloat(Eigen::Matrix4d Eig_matrix){
      
      Eigen::Matrix4f tempMatrix;
      tempMatrix << (float)Eig_matrix(0,0), (float)Eig_matrix(0,1), (float)Eig_matrix(0,2), (float)Eig_matrix(0,3),
@@ -416,9 +416,10 @@ public:
 private:
   InfiniTamDriver *static_scene_;
   ORB_SLAM2::drivers::OrbSLAMDriver *orbslam_static_scene_;
-  SparseSFProvider *sparse_sf_provider_;
-//   dynslam::eval::Evaluation *evaluation_;
   
+  PostPocessParams post_processing;
+  OnlineCorrectionParams online_correction;
+  bool use_orbslam_vo;
   
   double currFrameTimeStamp;
   int64_t fusionTotalTime = 0; 
@@ -465,7 +466,6 @@ private:
   
   /// NOTE 判断是否开启新地图的阈值
   const int N_originalblocks = 1000;
-  int new_local_min_age_;
   ///const float F_originalBlocksThreshold = 0.15f; //0.4f
   
   /// 将F_originalBlocksThreadhold设为-1.0,意味这暂时不开启新的地图
@@ -480,19 +480,7 @@ private:
   std::vector<Eigen::Matrix4f> pose_history_;
   /// \brief 归一化平面到像素平面？
   const Eigen::Matrix34f projection_left_rgb_;
-  const float stereo_baseline_m_;
-
-  /// \brief Perform dense depth computation and dense fusion every K frames.
-  /// A value of '1' is the default, and means regular operation fusing every frame.
-  /// This is used to evaluate the impact of doing semantic segmentation less often. Note that we
-  /// still *do* perform it, as we still need to evaluate the system every frame.
-  /// TODO(andrei): Support instance tracking in this framework: we would need SSF between t and t-k,
-  ///               so we DEFINITELY need separate VO to run in, say, 50ms at every frame, and then
-  ///               heavier, denser feature matching to run in ~200ms in parallel to the semantic
-  ///               segmentation, matching between this frames and, say, 3 frames ago. Luckily,
-  /// libviso should keep track of images internally, so if we have two instances we can just push
-  /// data and get SSF at whatever intervals we would like.
-  const int experimental_fusion_every_;
+  const float stereo_baseline_mm_;
 
   /// \brief Returns a path to the folder where the dataset's meshes should be dumped, creating it
   ///        using a native system call if it does not exist.

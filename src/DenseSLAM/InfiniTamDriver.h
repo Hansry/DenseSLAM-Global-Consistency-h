@@ -87,7 +87,7 @@ public:
       const Vector2i &img_size_rgb,
       const Vector2i &img_size_d,
       const VoxelDecayParams &voxel_decay_params,
-      bool use_depth_weighting)
+      ITMLib::Engine::WeightParams depth_weighting)
       : ITMLib::Engine::ITMMainEngine(settings, calib, img_size_rgb, img_size_d),
         rgb_itm_(new ITMUChar4Image(img_size_rgb, true, true)),
         raw_depth_itm_(new ITMShortImage(img_size_d, true, true)),
@@ -99,7 +99,7 @@ public:
         voxel_decay_params_(voxel_decay_params)
   {
     last_egomotion_->setIdentity();
-//     fusion_weight_params_.depthWeighting = use_depth_weighting;
+    fusion_weight_params_ = depth_weighting;
   }
 
   virtual ~InfiniTamDriver() {
@@ -172,13 +172,14 @@ public:
   
   /// @brief 融合局部地图
   void IntegrateLocalMap(const ITMLocalMap* currLocalMap) const{
-    // this->denseMapper->SetFusionWeightParams(fusion_weight_params_);
+    this->denseMapper->SetFusionWeightParams(fusion_weight_params_);
     this->denseMapper->ProcessFrame(
       this->view, currLocalMap->trackingState, currLocalMap->scene, currLocalMap->renderState);
   }
   
   /// @brief 对局部地图进行反融合
   void DeIntegrateLocalMap(const ITMLocalMap* currLocalMap) const{
+    this->denseMapper->SetFusionWeightParams(fusion_weight_params_);
     this->denseMapper->DeProcessFrame(
       this->view, currLocalMap->trackingState, currLocalMap->scene, currLocalMap->renderState);
   }
@@ -286,18 +287,6 @@ public:
       std::cout << "Decay (GC) catchup complete." << std::endl;
     }
   }
-
-  /// \brief Aggressive decay which ignores the minimum age requirement and acts on ALL voxels.
-  /// Typically used to clean up finished reconstructions. Can be much slower than `Decay`, even by
-  /// a few orders of magnitude if used on the full static map.
-  /// 通常用于清理已完成的地图重建，可以比‘Decay’慢得多，即使在高出几个数量级的完整静态地图上
-  /*
-  void Reap(int max_decay_weight) {
-    if (voxel_decay_params_.enabled) {
-      denseMapper->Decay(scene, renderState_live, max_decay_weight, 0, true);
-    }
-  }
-  */
   
   size_t GetVoxelSizeBytes() const {
      return sizeof(ITMVoxel);
@@ -356,20 +345,16 @@ public:
     return voxel_decay_params_;
   }
 
-  /*
   bool IsUsingDepthWeights() const {
     return fusion_weight_params_.depthWeighting;
   }
-  */
-
-
 
 SUPPORT_EIGEN_FIELDS;
 
  private:
   ITMUChar4Image *rgb_itm_;
   ITMShortImage  *raw_depth_itm_;
-//   ITMLib::Engine::WeightParams fusion_weight_params_;
+  ITMLib::Engine::WeightParams fusion_weight_params_;
 
   cv::Mat3b *rgb_cv_;
   cv::Mat1s *raw_depth_cv_;

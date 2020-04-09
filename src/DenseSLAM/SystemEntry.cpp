@@ -9,25 +9,23 @@ const std::string kKitti         = "kitti";
 const std::string ORBVocPath = "../src/ORB-SLAM2-API-M/Vocabulary/ORBvoc.txt";
 
 //将需要的命令行参数使用gflags的宏:DEFINE_xxxx(变量名，默认值，help-string)定义在文件当中，全局变量，存储在区全局区中
+
+//一些文件的读取
 DEFINE_string(dataset_root, "", "The root folder of the dataset or dataset sequence to use.");
 DEFINE_int32(sensor_type, 0, "The sensor type.");
 DEFINE_int32(dataset_type, 0, "Determine to use which dataset.");
+
+//常量路径
 DEFINE_string(ORBvoc, ORBVocPath, "the path to load the ORBvoc.txt");
 DEFINE_string(strSettingFile, "", "the path to load the setting file for ORBSLAM");
-DEFINE_int32(frame_offset, 0, "The frame index from which to start reading the dataset sequence.");
-DEFINE_int32(frame_limit, 0, "How many frames to process in auto mode. 0 = no limit.");
-DEFINE_bool(voxel_decay, true, "Whether to enable map regularization via voxel decay (a.k.a. voxel garbage collection).");
-DEFINE_int32(min_decay_age, 50, "The minimum voxel *block* age for voxels within it to be eligible for deletion (garbage collection)."); //kitti: 5, ICLNUIM-lvn1: 8, ICLNUIM-else: 5
-DEFINE_int32(max_decay_weight, 10, "The maximum voxel weight for decay. Voxels which have accumulated more than this many measurements will not be removed."); //kitti: 2, ICLNUIM-lvn1: 1, ICLNUIM-else: 1
-DEFINE_int32(kitti_tracking_sequence_id, -1, "Used in conjunction with --dataset_type kitti-tracking.");
+
+//一些不怎么需要改变的变量
 DEFINE_bool(direct_refinement, false, "Whether to refine motion estimates for other cars computed sparsely with RANSAC using a semidense direct image alignment method.");
-// TODO-LOW(andrei): Automatically adjust the voxel GC params when depth weighting is enabled.
-DEFINE_bool(use_depth_weighting, false, "Whether to adaptively set fusion weights as a function of the inverse depth (w \\propto \\frac{1}{Z}). If disabled, "
-                                        "all new measurements have a constant weight of 1.");
+DEFINE_bool(use_dispnet, false, "Whether to use DispNet depth maps. Otherwise ELAS is used.");
+DEFINE_bool(record, true, "Whether to record a video of the GUI and save it to disk. Using an external program usually leads to better results, though.");
 DEFINE_double(scale, 1.0, "Whether to run in reduced-scale mode. Used for experimental purposes. "
                           "Requires the (odometry) sequence to have been preprocessed using the "
                           "'scale_sequence.py' script.");
-DEFINE_bool(use_dispnet, false, "Whether to use DispNet depth maps. Otherwise ELAS is used.");
 DEFINE_int32(evaluation_delay, 0, "How many frames behind the current one should the evaluation be "
                                   "performed. A value of 0 signifies always computing the "
                                   "evaluation metrics on the most recent frames. Useful for "
@@ -35,15 +33,6 @@ DEFINE_int32(evaluation_delay, 0, "How many frames behind the current one should
                                   "the camera with a delay of 'min_decay_age'. Warning: does not "
                                   "support dynamic scenes.");
 DEFINE_bool(close_on_complete, true, "Whether to shut down automatically once 'frame_limit' is reached.");
-DEFINE_bool(record, true, "Whether to record a video of the GUI and save it to disk. Using an "
-                           "external program usually leads to better results, though.");
-DEFINE_bool(chase_cam, true, "Whether to preview the reconstruction in chase cam mode, following "
-                             "the camera from a third person view.");
-DEFINE_int32(fusion_every, 1, "Fuse every kth frame into the map. Used for evaluating the system's "
-                              "behavior under reduced temporal resolution.");
-DEFINE_bool(autoplay, false, "Whether to start with autoplay enabled. Useful for batch experiments.");
-DEFINE_bool(useOrbSLAMViewer, false, "Whether to launch the GUI of ORBSLAM2.");
-DEFINE_bool(viewRaycastDepth, true, "Whether to view the raycast depth.");
 
 // Note: the [RIP] tags signal spots where I wasted more than 30 minutes debugging a small, sillyzhe
 // issue, which could easily be avoided in the future.
@@ -53,7 +42,6 @@ DEFINE_bool(viewRaycastDepth, true, "Whether to view the raycast depth.");
 namespace SparsetoDense{
   
 using namespace std;
-
 using namespace SparsetoDense;
 using namespace SparsetoDense::eval;
 using namespace SparsetoDense::utils;
@@ -146,21 +134,46 @@ void BuildDenseSlamOdometry(const string &dataset_root,
       runtime_error("Currently not supported the dataset type !");
   }
   
+  string param_path = dataset_root + "/" + input_config.calibration_fname;
+  cv::FileStorage params(param_path.c_str(), cv::FileStorage::READ);
+  
+  int use_voxel_decay =  params["voxel_decay"];
   VoxelDecayParams voxel_decay_params(
-      FLAGS_voxel_decay,
-      FLAGS_min_decay_age,
-      FLAGS_max_decay_weight
+      (bool)use_voxel_decay,
+      params["min_decay_age"],
+      params["max_decay_weight"]
   );
-
-  //frame_offset=0 (default)
-  int frame_offset = FLAGS_frame_offset;
+  
+  int use_online_correction = params["online_correction"];
+  OnlineCorrectionParams online_correction_params{
+      (bool)use_online_correction,
+      params["Online_correction_num"]
+  };
+  
+  int use_post_processing = params["post_processing"];
+  PostPocessParams post_processing_params{
+     (bool)use_post_processing,
+     params["filter_threshold"],
+     params["filter_area"]
+  };
+  
+  int use_depth_weighting = params["depth_weighting"];
+  ITMLib::Engine::WeightParams  depth_weighting_params;
+  depth_weighting_params.depthWeighting = (bool)use_depth_weighting;
+  depth_weighting_params.maxNewW = params["maxNewW"];
+  depth_weighting_params.maxDistance = params["maxDistance"];
+  
+  int use_orbslam_vo = params["orbslam_vo"];
+  int use_orbslam_viewer = params["orbslam_viewer"];
+  
+  int frame_offset = params["frame_offset"];
   
   //基线
-  float baseline_m = 0.537150654273f;
+  float baseline_mm = params["Camera.bf"];
   float focal_length_px = left_color_proj(0, 0);
   
   //depth = baseline*fx/disparity
-  StereoCalibration stereo_calibration(baseline_m, focal_length_px);
+  StereoCalibration stereo_calibration(baseline_mm, focal_length_px);
 
   //输入，包含文件夹路径，内参，以及传感器的类型
   *input_out = new Input(
@@ -210,54 +223,30 @@ void BuildDenseSlamOdometry(const string &dataset_root,
       SparsetoDense::drivers::ToItmVec((*input_out)->GetRgbSize()),
       SparsetoDense::drivers::ToItmVec((*input_out)->GetDepthSize()),
       voxel_decay_params,
-      FLAGS_use_depth_weighting);
+      depth_weighting_params);  
    
   //与ORB_SLAM2的接口
   ORB_SLAM2::drivers::OrbSLAMDriver *orbDriver = new ORB_SLAM2::drivers::OrbSLAMDriver(
       FLAGS_ORBvoc,
       FLAGS_strSettingFile,
       sensor_type_orbslam,
-      FLAGS_useOrbSLAMViewer
+      (bool)use_orbslam_viewer
   );
   
-//   const string seg_folder = dataset_root + "/" + input_config.segmentation_folder;
-//   auto segmentation_provider = new instreclib::segmentation::PrecomputedSegmentationProvider(
-//                                     seg_folder, frame_offset, static_cast<float>(downscale_factor));
 
-  VisualOdometryStereo::parameters sf_params;
-  // TODO(andrei): The main VO (which we're not using viso2 for, at the moment (June '17) and the
-  // "VO" we use to align object instance frames have VASTLY different requirements, so we should
-  // use separate parameter sets for them.
-  sf_params.base = baseline_m;
-  sf_params.match.nms_n = 3;          // Optimal from KITTI leaderboard: 3 (also the default)
-  sf_params.match.half_resolution = 0;
-  sf_params.match.multi_stage = 1;    // Default = 1 (= 0 => much slower)
-  sf_params.match.refinement = 1;     // Default = 1 (per-pixel); 2 = sub-pixel, slower
-  sf_params.ransac_iters = 500;       // Default = 200
-  sf_params.inlier_threshold = 2.0;   // Default = 2.0 (insufficient for e.g., hill sequence)
-//  sf_params.inlier_threshold = 2.7;   // May be required for the hill sequence
-  sf_params.bucket.max_features = 15;    // Default = 2
-  // VO is computed using the color frames.
-  sf_params.calib.cu = left_color_proj(0, 2);
-  sf_params.calib.cv = left_color_proj(1, 2);
-  sf_params.calib.f  = left_color_proj(0, 0);
-
-  //进行光流估计，以检测动态物体
-  auto sparse_sf_provider = new instreclib::VisoSparseSFProvider(sf_params);
-  
   Vector2i input_shape((*input_out)->GetRgbSize().width, (*input_out)->GetRgbSize().height);
   
   //将所有的对象集成到该系统中
   *dense_slam_out = new DenseSlam(
       itmDriver,
       orbDriver,
-      sparse_sf_provider,
       input_shape,
       left_color_proj.cast<float>(),
-      baseline_m,
+      baseline_mm,
       FLAGS_direct_refinement,
-      FLAGS_fusion_every,
-      FLAGS_min_decay_age
+      post_processing_params,
+      online_correction_params,
+      (bool)use_orbslam_vo
   );
 }
 
@@ -316,14 +305,21 @@ int main(int argc, char **argv) {
   }
   BuildDenseSlamOdometry(dataset_root, &dense_slam, &input, sensor_type, sensor_type_orbslam, dataset_type);
   
+  string param_path = dataset_root + "/" + input->GetConfig().calibration_fname;
+  cv::FileStorage params(param_path.c_str(), cv::FileStorage::READ);
+  
+  int is_autoplay = params["auto_play"];
+  int is_chase_cam = params["chase_cam"];
+  int is_view_raycast_depth = params["view_ew_raycast_depth"];
+  
   SparsetoDense::gui::ParamSLAMGUI paramGUI;
-  paramGUI.autoplay = FLAGS_autoplay;
-  paramGUI.chase_cam = FLAGS_chase_cam;
+  paramGUI.autoplay = bool(is_autoplay);
+  paramGUI.chase_cam = bool(is_chase_cam);
+  paramGUI.viewRaycastDepth = (bool)is_view_raycast_depth;
+  paramGUI.frame_limit = params["frame_limit"];
   paramGUI.close_on_complete = FLAGS_close_on_complete;
   paramGUI.evaluation_delay = FLAGS_evaluation_delay;
-  paramGUI.frame_limit = FLAGS_frame_limit;
   paramGUI.record = FLAGS_record;
-  paramGUI.viewRaycastDepth = FLAGS_viewRaycastDepth;
   SparsetoDense::gui::PangolinGui pango_gui(dense_slam, input, paramGUI);
   pango_gui.Run();
 

@@ -81,7 +81,7 @@ public:
     config.left_color_folder      = "image_02/data";
     config.right_color_folder     = "image_03/data";
     config.fname_format           = "%010d.png";
-    config.calibration_fname      = "orbslam_param.yaml";
+    config.calibration_fname      = "param.yaml";
 
     config.min_depth_m            =  0.5f;
     config.max_depth_m            = 40.0f;
@@ -116,7 +116,7 @@ public:
     config.left_color_folder   = "rgb";
     config.right_gray_folder   = "";
     config.fname_format        = "%17f.png";   
-    config.calibration_fname   = "orbslam_param.yaml";
+    config.calibration_fname   = "param.yaml";
     
     config.min_depth_m         = 0.001f;
     config.max_depth_m         = 30.0f;
@@ -144,7 +144,7 @@ public:
     config.left_color_folder   = "rgb";
     config.right_gray_folder   = "";
     config.fname_format        = "%d.png";   
-    config.calibration_fname   = "orbslam_param.yaml";
+    config.calibration_fname   = "param.yaml";
     
     config.min_depth_m         = 0.001f;
     config.max_depth_m         = 30.0f;

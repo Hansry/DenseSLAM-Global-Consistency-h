@@ -137,6 +137,10 @@ public:
       return this->GetTracker()->getPreKeyframePose();
     }
     
+    std::map<double, cv::Mat>* GetgetFrameDataInfo(){
+      return this->GetTracker()->getFrameDataInfo();
+    }
+    
 private:
     Eigen::Matrix4f last_egomotion_;
     string strSettingsFile_;    

@@ -4,13 +4,6 @@
 
 #include "DenseSlam.h"
 
-DEFINE_bool(useOrbSLAMVO, true, "Whether to use OrbSLAM VO");
-DEFINE_bool(useSparseFlowVO, true, "Whether to use SparseFlow VO");
-DEFINE_bool(useOrbSLMKeyFrame, true, "Whether to use Keyframe strategy in ORB_SLAM2");
-DEFINE_bool(external_odo, true, "Whether to use external VO");
-DEFINE_bool(useFusion, true, "Whether to use Fusion Strategy");
-
-
 namespace SparsetoDense {
 
 void DenseSlam::ProcessFrame(Input *input) {
@@ -84,7 +77,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   { 
      unique_lock<mutex> lock(mMutexFrameDataBase);
      cv::Mat depthweight = cv::Mat::ones(input_raw_depth_image_->rows, input_raw_depth_image_->cols, CV_8UC1);
-     currFrameInfo currNormalFrame(input_rgb_image_n, input_raw_depth_image_n, depthweight);
+     currFrameInfo currNormalFrame(input_rgb_image_n, input_raw_depth_image_n, depthweight, currFrameTimeStamp);
      mframeDataBase[currFrameTimeStamp] = currNormalFrame;
 //      mframeDataBase[currFrameTimeStamp]= make_pair((input_rgb_image_n), (input_raw_depth_image_n));
   }
@@ -102,116 +95,22 @@ void DenseSlam::ProcessFrame(Input *input) {
      return;
   }
   
-  
   double currBAKFTime = mcurrBAKeyframe->mTimeStamp;
   orbSLAM2_Pose = mcurrBAKeyframe->GetPoseInverse();
   
-//   float fx = projection_left_rgb_(0,0);
-//   float fy = projection_left_rgb_(1,1);
-//   float cx = projection_left_rgb_(0,2);
-//   float cy = projection_left_rgb_(1,2);
-//   float inv_fx = 1.0/fx;
-//   float inv_fy = 1.0/fy;
-  
-  
-  utils::Tic("Depth Filter !");
-  {
+  utils::Tic("Depth of fusion frame update and post processing !");
+  if(post_processing.enabled){
+     bool depthPocessSucess = depthPostProcessing(currBAKFTime);
+     if(!depthPocessSucess){
+         return;
+     }
+  }
+  else{
     unique_lock<mutex> lock(mMutexBAKF);
-
     std::map<double, currFrameInfo>::iterator iter;
     iter = mframeDataBase.find(currBAKFTime); 
-    
     if(iter != mframeDataBase.end()){
-      
-//       if(!mfusionFrameDataBase.empty()){
-// 	
-// 	//iter_fusion指mfusionFrameDataBase的最后一个元素
-// 	map<double, fusionFrameInfo>::iterator iter_fusion = mfusionFrameDataBase.end();
-// 	--iter_fusion;
-// 	cv::Mat temp_pose = iter_fusion->second.poseinfo;
-// 	cout << "DenseSlam 133: temp_pose: " << temp_pose << endl;
-// 	cout << orbSLAM2_Pose << endl;
-// 	cv::Mat1s temp_depth_image = iter_fusion->second.depthinfo;
-// 	cv::Mat temp_weight = iter_fusion->second.depthweightinfo;
-// 	
-// 	cv::Mat input_image_show_rgb = (iter->second.rgbinfoc).clone();  
-// 	cv::Mat temp_image_show_rgb = (iter_fusion->second.rgbinfo).clone();
-// 	cv::Mat input_image_show_gray(input_image_show_rgb.rows, input_image_show_rgb.cols, CV_8UC1);
-// 	cv::Mat temp_image_show_gray(input_image_show_rgb.rows, input_image_show_rgb.cols, CV_8UC1);
-// 	cv::cvtColor(input_image_show_rgb,input_image_show_gray,CV_BGR2GRAY);
-// 	cv::cvtColor(temp_image_show_rgb,temp_image_show_gray,CV_BGR2GRAY);
-// 	
-// 	cv::Mat combineImg(input_image_show_rgb.rows, 2*input_image_show_rgb.cols, CV_8UC1);
-//         for(int row=0; row < input_image_show_rgb.rows; row++){
-// 	  for(int col=0; col < input_image_show_rgb.cols; col++){
-// 	       combineImg.at<uint8_t>(row,col) = temp_image_show_gray.at<uint8_t>(row,col);
-// 	  }
-// 	}
-// 	
-// 	for(int row=0; row < input_image_show_rgb.rows; row++){
-// 	  for(int col=input_image_show_rgb.cols; col < 2*input_image_show_rgb.cols; col++){
-// 	       combineImg.at<uint8_t>(row,col) = input_image_show_gray.at<uint8_t>(row,col);
-// 	  }
-// 	}
-// 	
-// 	cv::imshow("before combineImg: ", combineImg);
-//         cv::waitKey(0);
-// 	
-// 	int count = 0;
-// 	for(int row=0; row < iter->second.depthinfoc.rows; row++){
-// 	  for(int col=0; col < iter->second.depthinfoc.cols; col++){
-// 	     	
-// 	     cv::Mat depth_curr_coord = cv::Mat::ones(3,1,CV_32FC1);
-// 	     cv::Mat depth_curr_keyframe_coord = cv::Mat::ones(3,1,CV_32FC1);
-// 	     //将空间点从图像坐标投影到基于当前帧的空间点
-// 	     depth_curr_coord.at<float>(2,0) = ((float)temp_depth_image.at<int16_t>(row,col))/1000.0;
-// 	     if(depth_curr_coord.at<float>(2,0)<0.005) {
-// 	       continue;
-// 	     }
-// 	     
-// 	     depth_curr_coord.at<float>(0,0) = depth_curr_coord.at<float>(2,0) * (row - cx) * inv_fx; //X = Z*(u-cx)/fx
-// 	     depth_curr_coord.at<float>(1,0) = depth_curr_coord.at<float>(2,0) * (col - cy) * inv_fy; //Y = Z*(v-cy)/fy
-// 	     
-// 	     
-// 	     //当前帧到上一帧的相对变换矩阵Tcp=Tcw*Twp
-// 	     cv::Mat Tcp =  (orbSLAM2_Pose.clone().inv()) * temp_pose;
-// 	      //世界坐标系下的空间点
-// 	     depth_curr_keyframe_coord = Tcp.rowRange(0,3).colRange(0,3) * depth_curr_coord + Tcp.rowRange(0,3).col(3);
-// 	     
-// 	     //将当前关键帧的空间点投影到当前关键帧像平面上
-// 	     //+0.5主要是为了四舍五入
-// 	     int row_u =  fx * depth_curr_keyframe_coord.at<float>(0,0) * (1.0/depth_curr_keyframe_coord.at<float>(2,0)) + cx + 0.5; //u = fx*X/Z + cx
-// 	     int col_v =  fy * depth_curr_keyframe_coord.at<float>(1,0) * (1.0/depth_curr_keyframe_coord.at<float>(2,0)) + cy + 0.5; //v = fy*Y/Z + cy
-// 	     
-// 	     if(row_u < 0.1 || col_v < 0.1 || (row_u+1) > iter->second.depthinfoc.rows || (col_v+1) > iter->second.depthinfoc.cols){
-// 	       continue;
-// 	     }
-// 	     
-// 	     float currKeyFrameWeight = (float)iter->second.depthweightinfoc.at<uint8_t>(row_u, col_v);
-// 	     float currKeyFrameDepth = ((float)iter->second.depthinfoc.at<int16_t>(row_u, col_v))/1000.0;
-// 	     
-// 	     float tempKeyFrameWeight = (float)temp_weight.at<uint8_t>(row_u, col_v);
-// 	     
-// 	     if(currKeyFrameDepth<0.005){
-// 	       continue;
-// 	     }
-// 	     
-// 	     iter->second.depthinfoc.at<int16_t>(row_u,col_v) = (int16_t) (1000 * (currKeyFrameWeight + tempKeyFrameWeight) / ( currKeyFrameWeight/currKeyFrameDepth + tempKeyFrameWeight/depth_curr_keyframe_coord.at<float>(2,0)));
-//              iter->second.depthweightinfoc.at<uint8_t>(row_u, col_v) = (uint8_t) (currKeyFrameDepth + tempKeyFrameWeight);
-// 	     
-// 	     if(count % 3000 == 0){
-// 	        cv::line(combineImg, cv::Point(col,row), cv::Point(iter->second.depthinfoc.cols+col_v, row_u), cv::Scalar(255,0,0), 1, 8);
-// 	     }
-// 	     count ++;
-// 	  }
-// 	}
-// 	      
-//         cv::imshow("combineImg: ", combineImg);
-//         cv::waitKey(0);
-//       }
-//       cout << "DenseSlam 189: " << iter->second.depthweightinfoc << endl;
-      
-      ///当前关键帧的深度以及颜色信息
+       ///当前关键帧的深度以及颜色信息
       input_rgb_image_copy_ = (iter->second.rgbinfoc).clone();  
       input_raw_depth_image_copy_ = (iter->second.depthinfoc).clone();
       input_weight_copy_ = (iter->second.depthweightinfoc).clone();
@@ -220,13 +119,14 @@ void DenseSlam::ProcessFrame(Input *input) {
       mframeDataBase.erase(mframeDataBase.begin(), iter);
     }
     else{
-	 return;
+      return;
     }
   }
   utils::Toc();
 
     /// NOTE 如果是第一帧，则创建子地图，设置创建的子地图基于世界坐标系的位姿，这部分代码主要用于多子图的构建
   if(first_frame || shouldCreateNewLocalMap){
+    
     int currentLocalMapIdx = static_scene_->GetMapManager()->createNewLocalMap();
     ITMLib::Objects::ITMPose tempPose;
     //InvM指世界坐标系到相机的变换
@@ -238,10 +138,6 @@ void DenseSlam::ProcessFrame(Input *input) {
     
     *orbslam_tracking_gl()=true;
     orbslam_tracking_cond()->notify_one();
-//     orbslamVO.get();
-//     *orbslam_tracking_gl() = false;
-    
-//     shouldCreateNewLocalMap = false;
     first_frame = false;
   }
   
@@ -255,221 +151,27 @@ void DenseSlam::ProcessFrame(Input *input) {
   fusionFrameInfo currFusionFrame(orbSLAM2_Pose, input_rgb_image_copy_, input_raw_depth_image_copy_, 0, input_weight_copy_);
   mfusionFrameDataBase[currBAKFTime] = currFusionFrame;
   
-  vector<ORB_SLAM2::KeyFrame*> currAllKeyFrame = orbslam_static_scene_->GetMap()->GetAllKeyFrames();
-//   sort(currAllKeyFrame.begin(),currAllKeyFrame.end(),ORB_SLAM2::KeyFrame::lts);
+  utils::Tic("Online Correction !");
+  if(online_correction.enabled){
+     OnlineCorrection();
+  }
+  utils::Toc();
   
-  //error, timestamp
-  map<float, mapKeyframeInfo, greater<float>> mapPoseError;
-  
-//   utils::Tic("Online Correction !");
-//   for(size_t i=0; i<currAllKeyFrame.size();i++){
-//       ORB_SLAM2::KeyFrame* currMapKeyframe = currAllKeyFrame[i];
-//       if(currMapKeyframe->isBad()){
-// 	continue;
-//       }
-//       
-//       double currMapKeyframeTS  = currMapKeyframe->mTimeStamp;
-//       
-//       std::map<double, fusionFrameInfo>::iterator fusioniter;
-//       fusioniter = mfusionFrameDataBase.find(currMapKeyframeTS);
-//       
-//       if(fusioniter != mfusionFrameDataBase.end()){
-// 	//计算误差倆位姿之间的误差
-// 	Eigen::Matrix4f currPose = ORB_SLAM2::drivers::MatToEigen(currMapKeyframe->GetPoseInverse());
-// 	Eigen::Matrix4f prePose = ORB_SLAM2::drivers::MatToEigen(fusioniter->second.poseinfo);
-// 	fusioniter->second.flaginfo = 1;
-// 	
-// 	//李群,右差
-// 	Eigen::Matrix4f poseDiff = prePose.inverse() * currPose;
-// 	
-// 	if(is_identity_matrix(ORB_SLAM2::drivers::EigenToMat(poseDiff))){
-// 	  continue;
-// 	}
-// 		
-// 	//转成李代数
-// 	ITMLib::Objects::ITMPose tempDiff;
-// 	tempDiff.SetInvM(drivers::EigenToItm(poseDiff));
-// 	//se3的存储顺序为:
-// 	//tx, ty, tz, rx, ry, rz
-// 	float se3[6] = {0.0};
-// 	for(int i=0; i<6; i++){
-// 	  se3[i] = tempDiff.GetParams()[i];
-// 	}
-// 	
-// 	//反对称符号
-// 	Eigen::Matrix4f poseError;
-// 	poseError <<  0.0,   -se3[5],  se3[4], se3[0],
-// 	             se3[5],  0.0,   -se3[3],  se3[1],
-// 		    -se3[4], se3[3],   0.0,    se3[2],
-// 		      0.0,    0.0,     0.0,    0.0;
-// 		      
-// 	Eigen::Matrix4f poseErrorWeight;
-// 	poseErrorWeight << 0.5, 0.0, 0.0, 0.0,
-// 	                   0.0, 0.5, 0.0, 0.0,
-// 			   0.0, 0.0, 0.5, 0.0,
-// 			   0.0, 0.0, 0.0, 1.0;
-// 	
-// 	Eigen::Matrix4f innerProduct = poseError * poseErrorWeight * poseError.transpose();
-// 	float traceValue =  innerProduct.trace();
-// 	
-// 	float rightError = sqrt(traceValue);
-// 		
-// 	mapKeyframeInfo currKeyframe(currMapKeyframeTS, currMapKeyframe->GetPoseInverse());
-// 	
-//         mapPoseError[rightError] = currKeyframe;
-//       }
-//       else{
-// 	continue;
-//       }
-//   }
-  
-//   //当找到的位姿误差大于10帧了
-//   //在线调整的帧数
-//   int correctNum = 5;
-//   if(mapPoseError.size()>2){
-//     
-//      int countNum = 0;
-//      map<float,mapKeyframeInfo,greater<float>>::iterator errorIter;
-//      for(errorIter=mapPoseError.begin(); errorIter!=mapPoseError.end(); errorIter++){
-//        
-//        double timestamp = errorIter->second.timestampinfo;       
-//        std::map<double, fusionFrameInfo>::iterator defusioniter;
-//        defusioniter = mfusionFrameDataBase.find(timestamp);
-//        
-//        //其实这个判断条件应该可以不加的
-//        if(defusioniter!=mfusionFrameDataBase.end()){
-// 	 
-// 	 cv::Mat currPose = defusioniter->second.poseinfo;
-// // 	 cout << mfusionFrameDataBase[timestamp].poseinfo << endl;
-// 	 cv::Mat3b currRGBInfo = defusioniter->second.rgbinfo;
-// 	 cv::Mat1s currDepthInfo = defusioniter->second.depthinfo;
-// 	 
-// // 	 std::cout << "DenseSlam.cpp 242: M_d: " << currPose.inv() << std::endl;
-// 
-// 	 //Deintegrate
-// 	 static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(currPose));
-// // 	 cout << "DenseSlam245: timestamp: " << timestamp << endl;
-// 	 static_scene_->UpdateView(currRGBInfo, currDepthInfo, timestamp);
-// 	 static_scene_->DeIntegrateLocalMap(currentLocalMap);
-// 	 
-//  	 //Reintegrate
-// 	 defusioniter->second.poseinfo = errorIter->second.poseinfok.clone();
-// 	 currPose = defusioniter->second.poseinfo.clone();
-// // 	 cout << mfusionFrameDataBase[timestamp].poseinfo << endl;
-// // 	 std::cout << "DenseSlam.cpp 252: M_d: " << currPose.inv() << std::endl;
-// 
-// 	 static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(currPose));
-// 	 static_scene_->IntegrateLocalMap(currentLocalMap);
-// 	 
-// 	 countNum ++;
-//        }
-//        
-//        if(countNum > correctNum){
-// 	 break;
-//        }
-//     } 
-//   }
-//   utils::Toc();
-//   
-//   int beforeCull = mfusionFrameDataBase.size();
-//   utils::Tic("Deintegrate unoptimizer fusion keyframe and map!");
-//   //清除掉那些没有在mapKeyframe中找到的已经融合到地图中的关键帧，因为这些帧并不参与orbslam中的优化，可能是经过cullkeyframe后已经被剔除掉的
-//   for(map<double, fusionFrameInfo>::iterator iter=mfusionFrameDataBase.begin(); iter!=mfusionFrameDataBase.end(); iter++){
-//     if(iter->second.flaginfo == 0){
-//       cv::Mat currPose = iter->second.poseinfo;
-//       cv::Mat3b currRGBInfo = iter->second.rgbinfo;
-//       cv::Mat1s currDepthInfo = iter->second.depthinfo;
-//       
-//       static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(currPose));
-//       static_scene_->UpdateView(currRGBInfo, currDepthInfo, 0.0);
-//       static_scene_->DeIntegrateLocalMap(currentLocalMap);
-//       
-//       mfusionFrameDataBase.erase(iter);
-//     }   
-//   }
-//   int afterCull = mfusionFrameDataBase.size();
-//   utils::Toc();
-//   cout << "Cull keyframe Num: "<< beforeCull - afterCull << endl;
-  
-  
-  /// @brief 利用左右图像计算稀疏场景光流
-  if(FLAGS_external_odo){
+  if(use_orbslam_vo && !orbSLAM2_Pose.empty()){
     /// 使用ORBSLAM的里程计
-    if(FLAGS_useOrbSLAMVO){
       /// NOTE "2"意味着 OrbSLAM 跟踪成功
       /// 由于调用的是LocalBA后的位姿，因此可以不需要是否跟踪成功
-      if(!orbSLAM2_Pose.empty()){
-	    static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
-	    {
-	      unique_lock<mutex> lock(mMutexCond1);
-	      (*orbslam_static_scene_->GetPreKeyframePose()) = orbSLAM2_Pose.clone();
-	    }
-// 	    cout << "DenseSlam 280: " << orbSLAM2_Pose << endl;
-	    Eigen::Matrix4f currLocalMapPose = drivers::ItmToEigen(currentLocalMap->estimatedGlobalPose.GetM());
-	    if(shouldClearPoseHistory){
-	      pose_history_.clear();
-	    }
-	    pose_history_.push_back((currLocalMapPose*ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)).inverse());
-	    shouldClearPoseHistory = false;
-	 }
-      }
-    else if(input->GetSensorType() == Input::STEREO && FLAGS_useSparseFlowVO){
-      ///使用双目光流计算出来的里程计
-      future<void> ssf_and_vo = async(launch::async, [this, &input, &first_frame] {
-      utils::Tic("Sparse Scene Flow");
-
-      // Whether to use input from the original cameras. Unavailable with the tracking dataset.
-      // When original gray images are not used, the color ones are converted to grayscale and passed
-      // to the visual odometry instead.
-      bool original_gray = false;
-
-      cv::Mat1b *left_gray;
-      cv::Mat1b *right_gray;
-      // 如果是灰度图直接计算光流
-      if (original_gray) {
-         input->GetCvStereoGray(&left_gray, &right_gray);
-      }
-      // 如果输入的是RGB，先转成灰度图再计算光流
-      else {
-        cv::Mat3b *left_col, *right_col;
-        input->GetCvStereoColor(&left_col, &right_col);
-
-        left_gray = new cv::Mat1b(left_col->rows, left_col->cols);
-        right_gray = new cv::Mat1b(right_col->rows, right_col->cols);
-
-        cv::cvtColor(*left_col, *left_gray, cv::COLOR_RGB2GRAY);
-        cv::cvtColor(*right_col, *right_gray, cv::COLOR_RGB2GRAY);
-      }
-    
-      sparse_sf_provider_->ComputeSparseSF(
-         make_pair((cv::Mat1b *) nullptr, (cv::Mat1b *) nullptr),
-         make_pair(left_gray, right_gray)
-      );
-      if (!sparse_sf_provider_->FlowAvailable() && !first_frame) {
-         cerr << "Warning: could not compute scene flow." << endl;
-      }
-      utils::Toc("Sparse Scene Flow", false);
-  
-      utils::Tic("Visual Odometry");
-      /// 得到最新的位姿，相对于上一帧的位姿
-      /// T_{current, previous} 
-      Eigen::Matrix4f delta = sparse_sf_provider_->GetLatestMotion();
-
-      //使用光流进行跟踪
-      //new_pose为当前帧到世界坐标系(第一帧)下的位姿变换
-      //Tcurrent_w = Tcurrent_previous * previous_w
-      Eigen::Matrix4f new_pose = delta * pose_history_[pose_history_.size() - 1];
-      static_scene_->SetPoseLocalMap(currentLocalMap, new_pose.inverse());
-      pose_history_.push_back(new_pose);//将当前帧的位姿存储到vector中，方便下一次计算使用
-
-      if (! original_gray) {
-        delete left_gray;
-        delete right_gray;
-      }
-      utils::Toc("Visual Odometry", false);
-      });
-      ssf_and_vo.get();
+    static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose));
+    {
+      unique_lock<mutex> lock(mMutexCond1);
+      (*orbslam_static_scene_->GetPreKeyframePose()) = orbSLAM2_Pose.clone();
     }
+    Eigen::Matrix4f currLocalMapPose = drivers::ItmToEigen(currentLocalMap->estimatedGlobalPose.GetM());
+    if(shouldClearPoseHistory){
+	  pose_history_.clear();
+    }
+    pose_history_.push_back((currLocalMapPose*ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)).inverse());
+    shouldClearPoseHistory = false;
   }
   /// 使用内部使用的里程计
   else{
@@ -482,11 +184,10 @@ void DenseSlam::ProcessFrame(Input *input) {
       static_scene_->TrackLocalMap(currentLocalMap);
       //由raycast得到的深度图与当前深度图做ICP跟踪得到的位姿Tw->c
   }
-  utils::Toc();
   orbslamVO.get();
   
   utils::Tic("Static map fusion");
-  if (FLAGS_external_odo && current_frame_no_ % experimental_fusion_every_ == 0 && !orbSLAM2_Pose.empty()) {
+  if (use_orbslam_vo &&  !orbSLAM2_Pose.empty()) {
        static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_, currBAKFTime);
        static_scene_->IntegrateLocalMap(currentLocalMap);
        utils::Tic("Map decay");
@@ -494,13 +195,11 @@ void DenseSlam::ProcessFrame(Input *input) {
        utils::Toc();
    }
    else{
-      if (current_frame_no_ % experimental_fusion_every_ == 0) {
-//          static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_);
+//       static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_);
          static_scene_->IntegrateLocalMap(currentLocalMap);
 	 utils::Tic("Map decay");
          Decay();
          utils::Toc();
-      }
    }
    int64_t fusion_time = utils::Toc();
    fusionTotalTime += fusion_time;
@@ -527,6 +226,257 @@ bool DenseSlam::is_identity_matrix(cv::Mat matrix){
   }
   if(flags == 0) {return false;}
   else {return true;}
+}
+
+bool DenseSlam::OnlineCorrection(){
+    vector<ORB_SLAM2::KeyFrame*> currAllKeyFrame = orbslam_static_scene_->GetMap()->GetAllKeyFrames();
+//   sort(currAllKeyFrame.begin(),currAllKeyFrame.end(),ORB_SLAM2::KeyFrame::lts);
+  
+  //error, timestamp
+  map<float, mapKeyframeInfo, greater<float>> mapPoseError;
+  
+  for(size_t i=0; i<currAllKeyFrame.size();i++){
+      ORB_SLAM2::KeyFrame* currMapKeyframe = currAllKeyFrame[i];
+      if(currMapKeyframe->isBad()){
+	continue;
+      }
+      
+      double currMapKeyframeTS  = currMapKeyframe->mTimeStamp;
+      
+      std::map<double, fusionFrameInfo>::iterator fusioniter;
+      fusioniter = mfusionFrameDataBase.find(currMapKeyframeTS);
+      
+      if(fusioniter != mfusionFrameDataBase.end()){
+	//计算误差倆位姿之间的误差
+	Eigen::Matrix4f currPose = ORB_SLAM2::drivers::MatToEigen(currMapKeyframe->GetPoseInverse());
+	Eigen::Matrix4f prePose = ORB_SLAM2::drivers::MatToEigen(fusioniter->second.poseinfo);
+	fusioniter->second.flaginfo = 1;
+	
+	//李群,右差
+	Eigen::Matrix4f poseDiff = prePose.inverse() * currPose;
+	
+	if(is_identity_matrix(ORB_SLAM2::drivers::EigenToMat(poseDiff))){
+	  continue;
+	}
+		
+	//转成李代数
+	ITMLib::Objects::ITMPose tempDiff;
+	tempDiff.SetInvM(drivers::EigenToItm(poseDiff));
+	//se3的存储顺序为:
+	//tx, ty, tz, rx, ry, rz
+	float se3[6] = {0.0};
+	for(int i=0; i<6; i++){
+	  se3[i] = tempDiff.GetParams()[i];
+	}
+	
+	//反对称符号
+	Eigen::Matrix4f poseError;
+	poseError <<  0.0,   -se3[5],  se3[4], se3[0],
+	             se3[5],  0.0,   -se3[3],  se3[1],
+		    -se3[4], se3[3],   0.0,    se3[2],
+		      0.0,    0.0,     0.0,    0.0;
+		      
+	Eigen::Matrix4f poseErrorWeight;
+	poseErrorWeight << 0.5, 0.0, 0.0, 0.0,
+	                   0.0, 0.5, 0.0, 0.0,
+			   0.0, 0.0, 0.5, 0.0,
+			   0.0, 0.0, 0.0, 1.0;
+	
+	Eigen::Matrix4f innerProduct = poseError * poseErrorWeight * poseError.transpose();
+	float traceValue =  innerProduct.trace();
+	
+	float rightError = sqrt(traceValue);
+		
+	mapKeyframeInfo currKeyframe(currMapKeyframeTS, currMapKeyframe->GetPoseInverse());
+	
+        mapPoseError[rightError] = currKeyframe;
+      }
+      else{
+	continue;
+      }
+  }
+  
+  //当找到的位姿误差大于10帧了
+  //在线调整的帧数
+  int correctNum = online_correction.CorrectionNum;
+  if(mapPoseError.size()>10){
+    
+     int countNum = 0;
+     map<float,mapKeyframeInfo,greater<float>>::iterator errorIter;
+     for(errorIter=mapPoseError.begin(); errorIter!=mapPoseError.end(); errorIter++){
+       
+       double timestamp = errorIter->second.timestampinfo;       
+       std::map<double, fusionFrameInfo>::iterator defusioniter;
+       defusioniter = mfusionFrameDataBase.find(timestamp);
+       
+       //其实这个判断条件应该可以不加的
+       if(defusioniter!=mfusionFrameDataBase.end()){
+	 
+	 cv::Mat currPose = defusioniter->second.poseinfo;
+// 	 cout << mfusionFrameDataBase[timestamp].poseinfo << endl;
+	 cv::Mat3b currRGBInfo = defusioniter->second.rgbinfo;
+	 cv::Mat1s currDepthInfo = defusioniter->second.depthinfo;
+	 
+// 	 std::cout << "DenseSlam.cpp 242: M_d: " << currPose.inv() << std::endl;
+
+	 //Deintegrate
+	 static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(currPose));
+// 	 cout << "DenseSlam245: timestamp: " << timestamp << endl;
+	 static_scene_->UpdateView(currRGBInfo, currDepthInfo, timestamp);
+	 static_scene_->DeIntegrateLocalMap(currentLocalMap);
+	 
+ 	 //Reintegrate
+	 defusioniter->second.poseinfo = errorIter->second.poseinfok.clone();
+	 currPose = defusioniter->second.poseinfo.clone();
+// 	 cout << mfusionFrameDataBase[timestamp].poseinfo << endl;
+// 	 std::cout << "DenseSlam.cpp 252: M_d: " << currPose.inv() << std::endl;
+
+	 static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(currPose));
+	 static_scene_->IntegrateLocalMap(currentLocalMap);
+	 
+	 countNum ++;
+       }
+       
+       if(countNum > correctNum){
+	 break;
+       }
+    } 
+  }
+  
+  int beforeCull = mfusionFrameDataBase.size();
+  utils::Tic("Deintegrate unoptimizer fusion keyframe and map!");
+  //清除掉那些没有在mapKeyframe中找到的已经融合到地图中的关键帧，因为这些帧并不参与orbslam中的优化，可能是经过cullkeyframe后已经被剔除掉的
+  for(map<double, fusionFrameInfo>::iterator iter=mfusionFrameDataBase.begin(); iter!=mfusionFrameDataBase.end(); iter++){
+    if(iter->second.flaginfo == 0){
+      cv::Mat currPose = iter->second.poseinfo;
+      cv::Mat3b currRGBInfo = iter->second.rgbinfo;
+      cv::Mat1s currDepthInfo = iter->second.depthinfo;
+      
+      static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(currPose));
+      static_scene_->UpdateView(currRGBInfo, currDepthInfo, 0.0);
+      static_scene_->DeIntegrateLocalMap(currentLocalMap);
+      
+      mfusionFrameDataBase.erase(iter);
+    }   
+  }
+  int afterCull = mfusionFrameDataBase.size();
+  utils::Toc();  
+}
+
+bool DenseSlam::depthPostProcessing(double currBAKFTime){
+  
+    float fx = projection_left_rgb_(0,0);
+    float fy = projection_left_rgb_(1,1);
+    float cx = projection_left_rgb_(0,2);
+    float cy = projection_left_rgb_(1,2);
+    float inv_fx = 1.0/fx;
+    float inv_fy = 1.0/fy;
+    
+    unique_lock<mutex> lock(mMutexBAKF);
+
+    std::map<double, currFrameInfo>::iterator iter_curr;
+    iter_curr = mframeDataBase.find(currBAKFTime);
+    
+    std::map<double, currFrameInfo>::iterator iter_prev_rgb;
+    iter_prev_rgb = mframeDataBase.find(currBAKFTime);
+    
+    int count = 0;
+    if(iter_curr != mframeDataBase.end()){
+      
+      cv::Mat1s curr_depth = iter_curr->second.depthinfoc.clone();
+      cv::Mat curr_gray;
+      cv::cvtColor(iter_curr->second.rgbinfoc, curr_gray, cv::COLOR_BGR2GRAY);
+      
+      if(mframeDataBase.size() > 1 && orbslam_static_scene_->GetgetFrameDataInfo()->size() > 1){
+	iter_prev_rgb--;
+	
+	std::map<double, cv::Mat>::iterator iter_prev_pose;
+        iter_prev_pose = orbslam_static_scene_->GetgetFrameDataInfo()->find(iter_prev_rgb->second.timestampinfoc);
+	
+	if(iter_prev_pose != orbslam_static_scene_->GetgetFrameDataInfo()->end()){
+	
+	   cv::Mat prev_gray;
+	   cv::cvtColor(iter_prev_rgb->second.rgbinfoc, prev_gray, cv::COLOR_BGR2GRAY);
+	
+	   cv::Mat1s prev_depth = iter_prev_rgb->second.depthinfoc.clone();
+	
+	   cv::Mat prev_pose = (iter_prev_pose->second).clone();
+	
+           cv::Mat combineImg(curr_gray.rows, 2*curr_gray.cols, CV_8UC1);
+           for(int row=0; row < curr_gray.rows; row++){
+	     for(int col=0; col < curr_gray.cols; col++){
+	       combineImg.at<uint8_t>(row,col) = curr_gray.at<uint8_t>(row,col);
+	     }
+	   }
+	
+	   for(int row=0; row < curr_gray.rows; row++){
+	     for(int col=curr_gray.cols; col < 2*curr_gray.cols; col++){
+	        combineImg.at<uint8_t>(row,col) = prev_gray.at<uint8_t>(row,col);
+	     }
+	   }
+	
+// 	   imshow("previous depth", curr_depth);
+	   for(int row=0; row < curr_depth.rows; row++){
+ 	      for(int col=0; col < curr_depth.cols; col++){
+	        cv::Mat depth_curr_coord = cv::Mat::ones(3,1,CV_32FC1);
+	        cv::Mat depth_prev_coord = cv::Mat::ones(3,1,CV_32FC1);
+	        //将空间点从图像坐标投影到基于当前帧的空间点
+	        depth_curr_coord.at<float>(2,0) = ((float)curr_depth.at<int16_t>(row,col))/1000.0;
+	        if(depth_curr_coord.at<float>(2,0)<0.005) {
+	          continue;
+	        }
+	     
+	        depth_curr_coord.at<float>(0,0) = depth_curr_coord.at<float>(2,0) * (row - cx) * inv_fx; //X = Z*(u-cx)/fx
+	        depth_curr_coord.at<float>(1,0) = depth_curr_coord.at<float>(2,0) * (col - cy) * inv_fy; //Y = Z*(v-cy)/fy
+	     
+	        //当前帧相对于上一帧的变换矩阵Tpc = Tpw * Twc
+	        cv::Mat Tpc =  (prev_pose.inv()) * orbSLAM2_Pose;
+	        //世界坐标系下的空间点
+	        depth_prev_coord = Tpc.rowRange(0,3).colRange(0,3) * depth_curr_coord + Tpc.rowRange(0,3).col(3);
+	     
+	        //将前一帧的空间点投影到前一帧的像平面上
+	        //+0.5主要是为了四舍五入
+	        int row_u =  fx * depth_prev_coord.at<float>(0,0) * (1.0/depth_prev_coord.at<float>(2,0)) + cx + 0.5; //u = fx*X/Z + cx
+	        int col_v =  fy * depth_prev_coord.at<float>(1,0) * (1.0/depth_prev_coord.at<float>(2,0)) + cy + 0.5; //v = fy*Y/Z + cy
+	     
+	        if(row_u < 0.1 || col_v < 0.1 || (row_u+1) > prev_gray.rows || (col_v+1) > prev_gray.cols){
+	          continue;
+	        } 
+	     
+ 	        float prev_gray_intensity =  (float)prev_depth.at<uint16_t>(row_u, col_v) / 1000.0;
+	           if(prev_gray_intensity<0.005){
+ 	              continue;
+ 	        }
+	     
+	        float curr_gray_intensity =  depth_prev_coord.at<float>(2,0);
+	        float diff_depth = abs(prev_gray_intensity - curr_gray_intensity);
+	     
+	        if((diff_depth/curr_gray_intensity) > post_processing.filterThreshold && row > post_processing.filterArea * curr_depth.rows){
+	           curr_depth.at<int16_t>(row,col) = 0;
+	           cv::line(combineImg, cv::Point(col,row), cv::Point(prev_gray.cols+col_v, row_u), cv::Scalar(0,0,0), 1, 8);
+	        }
+	        count ++;
+	     }
+	   }
+	   
+	   orbslam_static_scene_->GetgetFrameDataInfo()->erase(orbslam_static_scene_->GetgetFrameDataInfo()->begin(), iter_prev_pose);
+	 }      
+      }
+      
+      ///当前关键帧的深度以及颜色信息
+      input_rgb_image_copy_ = (iter_curr->second.rgbinfoc).clone();  
+      input_raw_depth_image_copy_ = curr_depth.clone();
+//       cv::imshow("filted depth: ", input_raw_depth_image_copy_);
+//       cv::waitKey(0);
+      input_weight_copy_ = (iter_curr->second.depthweightinfoc).clone();
+      
+      //删除mframeDataBase和iter中间所有的元素
+      mframeDataBase.erase(mframeDataBase.begin(), iter_prev_rgb);
+      return true;
+    }
+    else{
+	 return false;
+    }
 }
 
 bool DenseSlam::shouldStartNewLocalMap(int CurrentLocalMapIdx) const {
