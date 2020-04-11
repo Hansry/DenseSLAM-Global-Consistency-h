@@ -20,4 +20,6 @@ blender/
 deps/
 data/
 mesh_out/
+raycastdepth/
+raycastRGB/
 raw-data-archives/

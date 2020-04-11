@@ -26,7 +26,6 @@ bool Input::HasMoreImages() {
   string next_fpath = "";
   if(mDatasetType == KITTI){
     next_fpath = GetFrameName(dataset_folder_, config_.left_color_folder, config_.fname_format, frame_idx_int);
-    cout << "next_fpath: 29" << next_fpath << endl;
   }
   else if(mDatasetType == TUM){
     double frame_idx = atof(frame_idx_pair.first.c_str());

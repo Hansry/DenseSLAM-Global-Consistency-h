@@ -43,18 +43,19 @@ void DenseSlam::ProcessFrame(Input *input) {
     }
   }
   
-  if(!first_frame && out_image_float_->GetData(MEMORYDEVICE_CPU)!=nullptr){
-    cv::Mat raycastDepth(input_raw_depth_image_n.rows, input_raw_depth_image_n.cols, CV_32FC1);
-    for(int row=0; row<input_rgb_image_n.rows; row++){
-      for(int col=0; col<input_rgb_image_n.cols; col++){
-	raycastDepth.at<float>(row,col) = static_cast<float>(out_image_float_->GetData(MEMORYDEVICE_CPU)[row * input_rgb_image_n.cols + col]);
-      }
-    }
-    
-    unique_lock<mutex> lock(mMutexCond);
-    *(orbslam_static_scene_->GetTrackinRaycastDepth()) = raycastDepth.clone();
-    *(orbslam_static_scene_->GetTrackingDepth()) = orbSLAMInputDepth.clone();
-  }
+     ///@brief 主要是为了在orbslam中加上icp,但是貌似没有太大的效果，待测
+//   if(!first_frame && out_image_float_->GetData(MEMORYDEVICE_CPU)!=nullptr){
+//     cv::Mat raycastDepth(input_raw_depth_image_n.rows, input_raw_depth_image_n.cols, CV_32FC1);
+//     for(int row=0; row<input_rgb_image_n.rows; row++){
+//       for(int col=0; col<input_rgb_image_n.cols; col++){
+// 	raycastDepth.at<float>(row,col) = static_cast<float>(out_image_float_->GetData(MEMORYDEVICE_CPU)[row * input_rgb_image_n.cols + col]);
+//       }
+//     }
+//     
+//     unique_lock<mutex> lock(mMutexCond);
+//     *(orbslam_static_scene_->GetTrackinRaycastDepth()) = raycastDepth.clone();
+//     *(orbslam_static_scene_->GetTrackingDepth()) = orbSLAMInputDepth.clone();
+//   }
   
   future<void> orbslamVO = async(launch::async, [this, &input, &orbSLAMInputDepth]{
     
@@ -150,6 +151,20 @@ void DenseSlam::ProcessFrame(Input *input) {
   
   fusionFrameInfo currFusionFrame(orbSLAM2_Pose, input_rgb_image_copy_, input_raw_depth_image_copy_, 0, input_weight_copy_);
   mfusionFrameDataBase[currBAKFTime] = currFusionFrame;
+  mfusionFrameDataBaseForRaycast[currBAKFTime] = currFusionFrame;
+
+  if(save_raycastdepth.enabled){
+     const std::string dataset_name = input->GetSequenceName();
+     const std::string fname_format = input->GetConfig().fname_format;
+    
+     SaveRaycastDepth(dataset_name, fname_format);
+  }
+  
+  if(save_raycastrgb.enabled){
+    const std::string dataset_name = input->GetSequenceName();
+    const std::string fname_format = input->GetConfig().fname_format;
+    SaveRaycastRGB(dataset_name, fname_format);
+  }
   
   utils::Tic("Online Correction !");
   if(online_correction.enabled){
@@ -402,18 +417,18 @@ bool DenseSlam::depthPostProcessing(double currBAKFTime){
 	
 	   cv::Mat prev_pose = (iter_prev_pose->second).clone();
 	
-           cv::Mat combineImg(curr_gray.rows, 2*curr_gray.cols, CV_8UC1);
-           for(int row=0; row < curr_gray.rows; row++){
-	     for(int col=0; col < curr_gray.cols; col++){
-	       combineImg.at<uint8_t>(row,col) = curr_gray.at<uint8_t>(row,col);
-	     }
-	   }
-	
-	   for(int row=0; row < curr_gray.rows; row++){
-	     for(int col=curr_gray.cols; col < 2*curr_gray.cols; col++){
-	        combineImg.at<uint8_t>(row,col) = prev_gray.at<uint8_t>(row,col);
-	     }
-	   }
+//            cv::Mat combineImg(curr_gray.rows, 2*curr_gray.cols, CV_8UC1);
+//            for(int row=0; row < curr_gray.rows; row++){
+// 	     for(int col=0; col < curr_gray.cols; col++){
+// 	       combineImg.at<uint8_t>(row,col) = curr_gray.at<uint8_t>(row,col);
+// 	     }
+// 	   }
+// 	
+// 	   for(int row=0; row < curr_gray.rows; row++){
+// 	     for(int col=curr_gray.cols; col < 2*curr_gray.cols; col++){
+// 	        combineImg.at<uint8_t>(row,col) = prev_gray.at<uint8_t>(row,col);
+// 	     }
+// 	   }
 	
 // 	   imshow("previous depth", curr_depth);
 	   for(int row=0; row < curr_depth.rows; row++){
@@ -453,7 +468,7 @@ bool DenseSlam::depthPostProcessing(double currBAKFTime){
 	     
 	        if((diff_depth/curr_gray_intensity) > post_processing.filterThreshold && row > post_processing.filterArea * curr_depth.rows){
 	           curr_depth.at<int16_t>(row,col) = 0;
-	           cv::line(combineImg, cv::Point(col,row), cv::Point(prev_gray.cols+col_v, row_u), cv::Scalar(0,0,0), 1, 8);
+// 	           cv::line(combineImg, cv::Point(col,row), cv::Point(prev_gray.cols+col_v, row_u), cv::Scalar(0,0,0), 1, 8);
 	        }
 	        count ++;
 	     }
@@ -498,6 +513,61 @@ int DenseSlam::createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose){
     return newIdx;
 }
 
+void DenseSlam::SaveRaycastDepth(const std::string &dataset_name, const string &fname_format) {
+  
+    if(mfusionFrameDataBaseForRaycast.size() > save_raycastdepth.delayNum){
+        map<double, fusionFrameInfo>::iterator raycast_iter = mfusionFrameDataBaseForRaycast.begin();
+        cv::Mat raycast_pose = raycast_iter->second.poseinfo.inv();
+        pangolin::OpenGlMatrix pm_raycast(ORB_SLAM2::drivers::MatToEigen(raycast_pose));
+        int current_preview_depth_type = PreviewType::kRaycastDepth;
+        /// NOTE 光线投影回来的深度图
+     
+        cv::Mat tempRaycastShort(raycast_iter->second.depthinfo.rows, raycast_iter->second.depthinfo.cols, CV_16UC1);
+        const float* tempRaycastDepth = GetRaycastDepthPreview(pm_raycast, static_cast<PreviewType>(current_preview_depth_type), save_raycastdepth.compositing_dense); 
+        //将raycast depth转成16位
+        SparsetoDense::FloatDepthmapToInt16(tempRaycastDepth, tempRaycastShort);
+     
+        string target_folder = "../raycastdepth/" + dataset_name;
+        string mkdir_folder = "mkdir -p " + target_folder;
+        std::system(mkdir_folder.c_str());
+        string index = utils::Format(fname_format ,(int)raycast_iter->first);
+        string imgSavePath = target_folder + "/" + index;
+        cv::imwrite(imgSavePath, tempRaycastShort);
+        raycast_iter++;
+	if(!save_raycastrgb.enabled){
+           mfusionFrameDataBaseForRaycast.erase(mfusionFrameDataBaseForRaycast.begin(), raycast_iter);
+	}
+   }
+}
+
+void DenseSlam::SaveRaycastRGB(const std::string &dataset_name, const string &fname_format) {
+     if(mfusionFrameDataBaseForRaycast.size() > save_raycastrgb.delayNum){
+        map<double, fusionFrameInfo>::iterator raycast_iter = mfusionFrameDataBaseForRaycast.begin();
+        cv::Mat raycast_pose = raycast_iter->second.poseinfo.inv();
+        pangolin::OpenGlMatrix pm_raycast(ORB_SLAM2::drivers::MatToEigen(raycast_pose));
+        int current_preview_depth_type = PreviewType::kColor;
+        /// NOTE 光线投影回来的深度图
+     
+        cv::Mat tempRaycastShort(raycast_iter->second.depthinfo.rows, raycast_iter->second.depthinfo.cols, CV_8UC3);
+
+	ITMUChar4Image* out_save_image_ = new ITMUChar4Image(input_shape_, true, true);
+	static_scene_->GetImage(out_save_image_, static_cast<PreviewType>(current_preview_depth_type), pm_raycast, currentLocalMap);
+	
+        //将raycast depth转成16位
+        SparsetoDense::ItmToCvMat(out_save_image_, tempRaycastShort);
+     
+        string target_folder = "../raycastRGB/" + dataset_name;
+        string mkdir_folder = "mkdir -p " + target_folder;
+        std::system(mkdir_folder.c_str());
+        string index = utils::Format(fname_format ,(int)raycast_iter->first);
+        string imgSavePath = target_folder + "/" + index; 
+        cv::imwrite(imgSavePath, tempRaycastShort);
+	delete out_save_image_;
+        raycast_iter++;
+        mfusionFrameDataBaseForRaycast.erase(mfusionFrameDataBaseForRaycast.begin(), raycast_iter);
+   }
+}
+
 void DenseSlam::SaveStaticMap(const std::string &dataset_name, const ITMLib::Engine::ITMLocalMap* currentLocalMap, int localMap_no) const {
   string target_folder = EnsureDumpFolderExists(dataset_name);
   string map_fpath = target_folder + "/" + "mesh-" + std::to_string(localMap_no) + "-frames.obj";
@@ -507,11 +577,11 @@ void DenseSlam::SaveStaticMap(const std::string &dataset_name, const ITMLib::Eng
 
 std::string DenseSlam::EnsureDumpFolderExists(const string &dataset_name) const {
   string today_folder = utils::GetDate();
-  string target_folder = "/home/hansry/DenseSLAM-Global-Consistency-h/mesh_out/" + dataset_name + "/" + today_folder;
+  string target_folder = "../mesh_out/" + dataset_name + "/" + today_folder;
   string mkdir_folder = "mkdir -p " + target_folder;
   bool unsucess = std::system(mkdir_folder.c_str());
 //   if(unsucess) {
-//     throw runtime_error(utils::Format("Could not create directory: %s", target_folder.c_str()));
+//      throw runtime_error(utils::Format("Could not create directory: %s", target_folder.c_str()));
 //   }
   return target_folder;
 }

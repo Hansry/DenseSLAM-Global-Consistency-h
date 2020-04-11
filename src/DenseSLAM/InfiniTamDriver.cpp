@@ -123,14 +123,49 @@ void ItmToCv(const ITMUChar4Image &itm, cv::Mat3b *out_mat) {
   }
 }
 
+void ItmToCvMat(const ITMUChar4Image *itm, cv::Mat& out_mat) {
+  const Vector4u *itm_data = itm->GetData(MemoryDeviceType::MEMORYDEVICE_CPU);
+  for (int i = 0; i < itm->noDims[1]; ++i) {
+    for (int j = 0; j < itm->noDims[0]; ++j) {
+      out_mat.at<cv::Vec3b>(i, j) = cv::Vec3b(
+          itm_data[i * itm->noDims[0] + j].b,
+          itm_data[i * itm->noDims[0] + j].g,
+          itm_data[i * itm->noDims[0] + j].r
+      );
+    }
+  }
+}
+
+void Char4RGBToUC3(const unsigned char *pixels, cv::Mat &out_mat) {
+  for (int i = 0; i < out_mat.rows; ++i) {
+    for (int j = 0; j < out_mat.cols; j+=3) {
+      out_mat.at<cv::Vec3b>(i, j) = cv::Vec3b(pixels[i * out_mat.cols + j], pixels[i*out_mat.cols + j+1], pixels[i*out_mat.cols + j+2]);
+    }
+  }
+}
+
+/// @brief 将深度图从Float转成int_16类型,这里将float转成short会乘上1000
+void FloatDepthmapToShort(const float *pixels, cv::Mat1s &out_mat) {
+  const int kMetersToMillimeters = 1000;
+//   int count = 0;
+  for (int i = 0; i < out_mat.rows; ++i) {
+    for (int j = 0; j < out_mat.cols; ++j) {
+      /// ITM internal: depth = meters, float
+      /// Our preview:  depth = mm, short int
+      out_mat.at<int16_t>(i, j) = static_cast<int16_t>(
+          pixels[i * out_mat.cols + j] * kMetersToMillimeters
+      );
+    }
+  }
+}
+
 /// @brief 将InfiniTAM 深度图转换成OpenCV Mat格式
 void ItmToCv(const ITMShortImage &itm, cv::Mat1s *out_mat) {
   const int16_t *itm_data = itm.GetData(MemoryDeviceType::MEMORYDEVICE_CPU);
   memcpy(out_mat->data, itm_data, itm.noDims[0] * itm.noDims[1] * sizeof(int16_t));
 }
 
-/// @brief 将深度图从Float转成Short类型,这里将float转成short会乘上1000
-void FloatDepthmapToShort(const float *pixels, cv::Mat1s &out_mat) {
+void FloatDepthmapToInt16(const float *pixels, cv::Mat &out_mat) {
   const int kMetersToMillimeters = 1000;
 //   int count = 0;
   for (int i = 0; i < out_mat.rows; ++i) {

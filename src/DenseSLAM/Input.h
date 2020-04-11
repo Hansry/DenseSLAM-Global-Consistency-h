@@ -75,7 +75,7 @@ public:
   /// Details and downloads: http://www.cvlibs.net/datasets/kitti/eval_odometry.php
   static Config KittiOdometryConfig() {
     Config config;
-    config.dataset_name           = "kitti-odometry";
+    config.dataset_name           = "KITTI-odometry";
     config.left_gray_folder       = "image_00/data";
     config.right_gray_folder      = "image_01/data";
     config.left_color_folder      = "image_02/data";

@@ -52,6 +52,11 @@ void CvToItm(const cv::Mat1s &mat, ITMShortImage *out_itm);
 /// \brief 将InfiniTAM rgb(a)图像转换为OpenCV RGB mat格式，丢弃掉alpha通道的信息
 void ItmToCv(const ITMUChar4Image &itm, cv::Mat3b *out_mat);
 
+void ItmToCvMat(const ITMUChar4Image *itm, cv::Mat &out_mat);
+
+/// \brief 将RGBA图像从uchar转换为OpenCV RGB mat格式，丢弃掉alpha通道的信息
+void Char4RGBToUC3(const unsigned char *pixels, cv::Mat &out_mat);
+
 /// \brief 将InfiniTAM深度图转换为Opencv Mat格式的深度图
 void ItmToCv(const ITMShortImage &itm, cv::Mat1s *out_mat);
 
@@ -60,6 +65,8 @@ void ItmDepthToCv(const ITMFloatImage &itm, cv::Mat1s *out_mat);
 
 /// @brief 将深度图从Float转成Short类型,这里将float转成short会乘上1000
 void FloatDepthmapToShort(const float *pixels, cv::Mat1s &out_mat);
+
+void FloatDepthmapToInt16(const float *pixels, cv::Mat &out_mat);
 
 /// \brief 将深度图从Float转到Short
 void FloatDepthmapToShortForRaycast(const float* pixels, cv::Mat1s &out_mat);

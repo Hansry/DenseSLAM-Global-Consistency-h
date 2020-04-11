@@ -74,7 +74,7 @@ void PangolinGui::Run(){
     // Default hooks for exiting (Esc) and fullscreen (tab).
     while (!pangolin::ShouldQuit()) {
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-      glColor3f(1.0, 1.0, 1.0);
+      glColor3f(255.0, 255.0, 255.0);
       pangolin::GlFont &font = pangolin::GlFont::I();
 
       //自动运行
@@ -97,7 +97,7 @@ void PangolinGui::Run(){
 
       main_view_->Activate(*pane_cam_);
       glEnable(GL_DEPTH_TEST);
-      glColor3f(1.0f, 1.0f, 1.0f);
+      glColor3f(255.0f, 255.0f, 255.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
       glDisable(GL_DEPTH_TEST);
       glDepthMask(false);
@@ -473,7 +473,7 @@ void PangolinGui::CreatePangolinDisplays(){
     //SetBounds(bottom, top, left, right)
     if(dense_slam_input_->GetDatasetType() == Input::KITTI){
        if(dense_slam_input_->GetDepthSize().width == 912){
-	  main_view_->SetBounds(pangolin::Attach::Pix(height_ *2.5), pangolin::Attach::Pix(height_ * 4.5), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth*1.2+width_));
+	  main_view_->SetBounds(pangolin::Attach::Pix(height_ *2.5), pangolin::Attach::Pix(height_ * 4.0), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
           orbslam_view_->SetBounds(pangolin::Attach::Pix(height_ * 1.0), pangolin::Attach::Pix(height_ * 2.5), pangolin::Attach::Pix(kUiWidth), pangolin::Attach::Pix(kUiWidth+width_));
        }
        else{

@@ -93,6 +93,8 @@ class DenseSlam {
           bool enable_direct_refinement,
           PostPocessParams post_processing,
 	  OnlineCorrectionParams online_correction,
+	  SaveRaycastDepthParams raycast_depth,
+	  SaveRaycastRGBParams raycast_rgb,
 	  bool use_orbslam_vo)
     : static_scene_(itm_static_scene_engine),
       orbslam_static_scene_(orb_static_engine),
@@ -102,6 +104,7 @@ class DenseSlam {
       input_rgb_image_(new cv::Mat3b(input_shape.x, input_shape.y)),
       input_raw_depth_image_(new cv::Mat1s(input_shape.x, input_shape.y)),
       current_frame_no_(0),
+      input_shape_(input_shape),
       input_width_(input_shape.x),
       input_height_(input_shape.y),
       pose_history_({ Eigen::Matrix4f::Identity() }),
@@ -109,6 +112,8 @@ class DenseSlam {
       stereo_baseline_mm_(stereo_baseline_mm),
       online_correction(online_correction),
       post_processing(post_processing),
+      save_raycastdepth(raycast_depth),
+      save_raycastrgb(raycast_rgb),
       use_orbslam_vo(use_orbslam_vo)
   {
       mFeatures_ = ExtractKeyPointNum();
@@ -390,6 +395,10 @@ public:
     orbslam_static_scene_->SaveTUMTrajectory(filename);
   }
   
+  void SaveRaycastDepth(const std::string &dataset_name, const string &fname_format);
+  
+  void SaveRaycastRGB(const std::string &dataset_name, const string &fname_format);
+  
   bool is_identity_matrix(cv::Mat matrix);
   
   bool shouldStartNewLocalMap(int CurrentLocalMapIdx) const; 
@@ -400,6 +409,7 @@ public:
   
   //融合帧的timestamp,位姿，RGB信息和深度图
   map<double, fusionFrameInfo> mfusionFrameDataBase;
+  map<double, fusionFrameInfo> mfusionFrameDataBaseForRaycast;
   
   std::vector<TodoListEntry> todoList;
   
@@ -419,6 +429,8 @@ private:
   
   PostPocessParams post_processing;
   OnlineCorrectionParams online_correction;
+  SaveRaycastDepthParams save_raycastdepth;
+  SaveRaycastRGBParams save_raycastrgb;
   bool use_orbslam_vo;
   
   double currFrameTimeStamp;
@@ -438,10 +450,11 @@ private:
   cv::Mat1s input_raw_depth_image_copy_;
   cv::Mat input_weight_copy_;
   
-  int current_frame_no_ = 0;
+  int current_frame_no_ = 1;
   int current_keyframe_no_ = 1;
   int input_width_;
   int input_height_;
+  const Vector2i input_shape_;
   
   // NOTE PD控制器的参数
   int mFeatures_;

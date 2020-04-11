@@ -33,6 +33,24 @@ struct PostPocessParams{
        : enabled(enabled), filterThreshold(filterThreshold), filterArea(filterArea) {}
 };
 
+struct SaveRaycastDepthParams{
+  bool enabled;
+  bool compositing_dense;
+  int delayNum;
+  
+  SaveRaycastDepthParams(bool enabled, bool compositing_dense, int delayNum)
+        : enabled(enabled), compositing_dense(compositing_dense), delayNum(delayNum) {}
+};
+
+struct SaveRaycastRGBParams{
+  bool enabled;
+  bool compositing_dense;
+  int delayNum;
+  
+  SaveRaycastRGBParams(bool enabled, bool compositing_dense, int delayNum)
+        : enabled(enabled), compositing_dense(compositing_dense), delayNum(delayNum) {}
+};
+
 } //namespace SparsetoDense
 
 #endif //DENSESLAM_VOXELDECAYPARAMS_H

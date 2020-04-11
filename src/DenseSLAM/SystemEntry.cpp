@@ -2,6 +2,7 @@
 #include "InfiniTamDriver.h"
 #include <sys/types.h>
 #include <dirent.h>
+#include "Utils.h"
 
 const std::string kKittiOdometry = "kitti-odometry";
 const std::string kKittiTracking = "kitti-tracking";
@@ -157,6 +158,22 @@ void BuildDenseSlamOdometry(const string &dataset_root,
      params["filter_area"]
   };
   
+  int save_raycastdepth = params["raycast_depth"];
+  int enable_compositing_dense = params["compositing_dense"];
+  SaveRaycastDepthParams raycast_depth_params{
+    (bool)save_raycastdepth,
+    (bool)enable_compositing_dense,
+    params["delay_num"]
+  };
+  
+  int save_raycastrgb = params["raycast_rgb"];
+  int enable_compositing_dense_rgb = params["compositing_dense_rgb"];
+  SaveRaycastRGBParams raycast_rgb_params{
+    (bool)save_raycastrgb,
+    (bool)enable_compositing_dense_rgb,
+    params["delay_num_rgb"]
+  };
+  
   int use_depth_weighting = params["depth_weighting"];
   ITMLib::Engine::WeightParams  depth_weighting_params;
   depth_weighting_params.depthWeighting = (bool)use_depth_weighting;
@@ -171,6 +188,9 @@ void BuildDenseSlamOdometry(const string &dataset_root,
   //基线
   float baseline_mm = params["Camera.bf"];
   float focal_length_px = left_color_proj(0, 0);
+  
+  input_config.max_depth_m = params["ThFarDepth"];
+  input_config.min_depth_m = params["ThCloseDepth"];
   
   //depth = baseline*fx/disparity
   StereoCalibration stereo_calibration(baseline_mm, focal_length_px);
@@ -246,6 +266,8 @@ void BuildDenseSlamOdometry(const string &dataset_root,
       FLAGS_direct_refinement,
       post_processing_params,
       online_correction_params,
+      raycast_depth_params,
+      raycast_rgb_params,
       (bool)use_orbslam_vo
   );
 }
@@ -308,21 +330,53 @@ int main(int argc, char **argv) {
   string param_path = dataset_root + "/" + input->GetConfig().calibration_fname;
   cv::FileStorage params(param_path.c_str(), cv::FileStorage::READ);
   
-  int is_autoplay = params["auto_play"];
-  int is_chase_cam = params["chase_cam"];
-  int is_view_raycast_depth = params["view_ew_raycast_depth"];
-  
-  SparsetoDense::gui::ParamSLAMGUI paramGUI;
-  paramGUI.autoplay = bool(is_autoplay);
-  paramGUI.chase_cam = bool(is_chase_cam);
-  paramGUI.viewRaycastDepth = (bool)is_view_raycast_depth;
-  paramGUI.frame_limit = params["frame_limit"];
-  paramGUI.close_on_complete = FLAGS_close_on_complete;
-  paramGUI.evaluation_delay = FLAGS_evaluation_delay;
-  paramGUI.record = FLAGS_record;
-  SparsetoDense::gui::PangolinGui pango_gui(dense_slam, input, paramGUI);
-  pango_gui.Run();
+  int use_GUI = params["GUI_SHOW"];
+  if(!(bool)use_GUI){
+    int count = 0;
+    int totalcount = params["frame_limit"];
+    while(input->HasMoreImages() || input->GetFrameIndex() < 980){
+      SparsetoDense::utils::Tic("DenseSLAM frame");
+      cout << endl << "[Starting frame " << dense_slam->GetCurrentFrameNo() << "]" << endl;
+      dense_slam->ProcessFrame(input);
+      int64_t frame_time_ms = SparsetoDense::utils::Toc(true);
+      float fps = 1000.0f / static_cast<float>(frame_time_ms);
+      cout << "[Finished frame " << dense_slam->GetCurrentFrameNo()-1 << " in " << frame_time_ms
+           << "ms @ " << setprecision(4) << fps << " FPS (approx.)]"
+           << endl;
+      if(count > totalcount){
+         break;
+      }
+      count ++;
+     }
 
+     dense_slam->SaveTUMTrajectory("/home/hansry/DenseSLAM-Global-Consistency-h/data/result.txt");
+     cout << "No more images, Bye!" << endl;
+      
+     if(!dense_slam->todoList.empty()){
+       for(int mapNO = 0; mapNO < dense_slam->todoList.size(); mapNO++){
+	 int mapNum = dense_slam->todoList[mapNO].dataId;
+	 ITMLib::Engine::ITMLocalMap* currLocalMap = dense_slam->GetStaticScene()->GetMapManager()->getLocalMap(mapNum);
+	 dense_slam->SaveStaticMap(input->GetDatasetIdentifier(), currLocalMap, mapNum);   
+       }
+      }
+     getchar();
+  }
+  else{
+     int is_autoplay = params["auto_play"];
+     int is_chase_cam = params["chase_cam"];
+     int is_view_raycast_depth = params["view_ew_raycast_depth"];
+  
+     SparsetoDense::gui::ParamSLAMGUI paramGUI;
+     paramGUI.autoplay = bool(is_autoplay);
+     paramGUI.chase_cam = bool(is_chase_cam);
+     paramGUI.viewRaycastDepth = (bool)is_view_raycast_depth;
+     paramGUI.frame_limit = params["frame_limit"];
+     paramGUI.close_on_complete = FLAGS_close_on_complete;
+     paramGUI.evaluation_delay = FLAGS_evaluation_delay;
+     paramGUI.record = FLAGS_record;
+     SparsetoDense::gui::PangolinGui pango_gui(dense_slam, input, paramGUI);
+     pango_gui.Run();
+  }
   delete dense_slam;
   delete input;
 }
