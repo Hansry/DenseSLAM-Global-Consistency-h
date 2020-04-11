@@ -1,12 +1,8 @@
 # DenseSLAM: Simultaneous Localization and Mapping for sparse and dense maps generation.
 
-This is a dense SLAM system written in C++. It builds on [InfiniTAM](https://github.com/victorprad/InfiniTAM). Using the odometry from ORBSLAM2, this system generates the dense map form InfiniTAM. 
+This is a dense SLAM system written in C++. It builds on volumetric fusion similar to [InfiniTAM](https://github.com/victorprad/InfiniTAM), which use voxel hashing for map storage). This system uses the odometry from ORBSLAM2 and generates the dense map simultaneously. 
 
 The source code is [hosted on GitHub](https://github.com/Hansry/DenseSLAM-Global-Consistency-h).
-
-## Related Repositories
-
- * [My InfiniTAM fork](https://github.com/Hansry/InfiniTAM-Global-Consistency-h), which is used by this system for dense map reconstruction (via volumetric fusion, using voxel hashing for map storage).
 
 ## Building and Running DenseSLAM
 
@@ -21,7 +17,7 @@ forget it, just run `git submodule update --init --recursive`.
     ```bash
     git clone --recursive https://github.com/Hansry/DenseSLAM-Global-Consistency-h
     ```
- 2. Install OpenCV 2.4.9 and CUDA 9.0.
+ 2. Install OpenCV 2.4.9, CUDA 9.0, [Pangolin](https://github.com/stevenlovegrove/Pangolin.git).
  3. Install the prerequisites (Ubuntu example):
     ```bash
     sudo apt-get install libxmu-dev libxi-dev freeglut3 freeglut3-dev glew-utils libglew-dev libglew-dbg libpthread-stubs0-dev binutils-dev libgflags-dev libpng++-dev libeigen3-dev
@@ -30,15 +26,22 @@ forget it, just run `git submodule update --init --recursive`.
     ```bash
     cd src/Pangolin && mkdir build/ && cd $_ && cmake ../ && make -j$(nproc)
     ```
- 5. Build the project in the standard CMake fashion:
+ 5. Build g2o to make sure it gets put into CMake registry:
+    ```bash
+    cd src/ORB-SLAM2-API-M/Thirdparty/g2o_with_orbslam2 && mkdir build/ && cd $_ && cmake ../ && make -j$(nproc)
+    ```
+ 6. Build the project in the standard CMake fashion:
     ```bash
     mkdir build && cd build && cmake .. && make -j$(nproc)
     ```
 
 ### Demo Sequence
- 1. After building the project, try processing the demo sequence: 
-    [here is a short sample from KITTI Odometry Sequence 06](https://drive.google.com/uc?export=download&confirm=Nnbd&id=1V-I4Tle7MNbmnf2qRe6aTpjxOld2M2i8).
-      1. Extract that to a directory, and run DynSLAM on it (the mkdir circumvents a silly bug):
+  After building the project, try processing the demo sequence: [here is a short sample from KITTI 2011_09_30_drive_0033_sync](https://pan.baidu.com/s/1WVYVVWjbijLDcnHPnMEWsQ) and the password is [baes].
+  Extract that to a directory, and run DenseSLAM on it (the mkdir circumvents a silly bug):
         ```bash
-        mkdir -p csv/ && build/DynSLAM --use_dispnet --dataset_root=path/to/extracted/archive --dataset_type=kitti-odometry
+        mkdir -p csv && cd build && ./DenseSLAMGUI --dataset_root=path/to/extracted/archive --dataset_root=../data/KITTI/2011_09_30_drive_0033_sync  --sensor_type=1 --dataset_type=0
         ```
+  Note that:
+  sesor_type:  =0 means MONOCULAR, =1 means STEREO, =2 means RGBD
+  dataset_type: =0 meas KITTI dataset, =1 means TUM dataset, =2 means ICLNUIM dataset
+
