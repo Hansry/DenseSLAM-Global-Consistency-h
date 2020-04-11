@@ -36,12 +36,14 @@ forget it, just run `git submodule update --init --recursive`.
     ```
 
 ### Demo Sequence
-  After building the project, try processing the demo sequence: [here is a short sample from KITTI 2011_09_30_drive_0033_sync](https://pan.baidu.com/s/1WVYVVWjbijLDcnHPnMEWsQ) and the password is [baes].
-  Extract that to a directory, and run DenseSLAM on it (the mkdir circumvents a silly bug):
+  After building the project, try processing the demo sequence: [here is a short sample from KITTI 2011_09_30_drive_0033_sync](https://pan.baidu.com/s/1WVYVVWjbijLDcnHPnMEWsQ) and the password is `baes`.
+
+  1. Extract that to a directory, and run DenseSLAM on it (the mkdir circumvents a silly bug):
         ```bash
         mkdir -p csv && cd build && ./DenseSLAMGUI --dataset_root=path/to/extracted/archive --dataset_root=../data/KITTI/2011_09_30_drive_0033_sync  --sensor_type=1 --dataset_type=0
         ```
-  Note that:
-  sesor_type:  =0 means MONOCULAR, =1 means STEREO, =2 means RGBD
-  dataset_type: =0 meas KITTI dataset, =1 means TUM dataset, =2 means ICLNUIM dataset
+  2. Note that:
+     
+     sesor_type:  =0 means MONOCULAR, =1 means STEREO, =2 means RGBD
+     dataset_type: =0 meas KITTI dataset, =1 means TUM dataset, =2 means ICLNUIM dataset
 
