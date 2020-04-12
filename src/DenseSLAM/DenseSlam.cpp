@@ -89,7 +89,6 @@ void DenseSlam::ProcessFrame(Input *input) {
   if(orbslam_static_scene_localBAKF()->empty()){
        return;
   }
-  cout << "DenseSlam 102: " << endl;
   mcurrBAKeyframe = orbslam_static_scene_localBAKF()->front();
   orbslam_static_scene_localBAKF()->pop_front();
   if(mcurrBAKeyframe->isBad()){
@@ -100,7 +99,11 @@ void DenseSlam::ProcessFrame(Input *input) {
   orbSLAM2_Pose = mcurrBAKeyframe->GetPoseInverse();
   
   utils::Tic("Depth of fusion frame update and post processing !");
-  if(post_processing.enabled){
+  if(post_processing_.enabled){
+     //这是为了第一帧关键帧在融合的时候没有相邻帧进行depth postproceessing,因此保证mframeDataBase大于
+     if(mframeDataBase.size() < 2){
+        return;
+     }
      bool depthPocessSucess = depthPostProcessing(currBAKFTime);
      if(!depthPocessSucess){
          return;
@@ -148,31 +151,32 @@ void DenseSlam::ProcessFrame(Input *input) {
   }
   todoList.back().endKeyframeTimeStamp = lastKeyFrameTimeStamp;
   
-  
   fusionFrameInfo currFusionFrame(orbSLAM2_Pose, input_rgb_image_copy_, input_raw_depth_image_copy_, 0, input_weight_copy_);
   mfusionFrameDataBase[currBAKFTime] = currFusionFrame;
   mfusionFrameDataBaseForRaycast[currBAKFTime] = currFusionFrame;
+  
 
-  if(save_raycastdepth.enabled){
+  if(save_raycastdepth_.enabled){
      const std::string dataset_name = input->GetSequenceName();
      const std::string fname_format = input->GetConfig().fname_format;
     
      SaveRaycastDepth(dataset_name, fname_format);
   }
   
-  if(save_raycastrgb.enabled){
+  if(save_raycastrgb_.enabled){
     const std::string dataset_name = input->GetSequenceName();
     const std::string fname_format = input->GetConfig().fname_format;
+    
     SaveRaycastRGB(dataset_name, fname_format);
   }
   
   utils::Tic("Online Correction !");
-  if(online_correction.enabled){
+  if(online_correction_.enabled){
      OnlineCorrection();
   }
   utils::Toc();
   
-  if(use_orbslam_vo && !orbSLAM2_Pose.empty()){
+  if(use_orbslam_vo_ && !orbSLAM2_Pose.empty()){
     /// 使用ORBSLAM的里程计
       /// NOTE "2"意味着 OrbSLAM 跟踪成功
       /// 由于调用的是LocalBA后的位姿，因此可以不需要是否跟踪成功
@@ -202,9 +206,17 @@ void DenseSlam::ProcessFrame(Input *input) {
   orbslamVO.get();
   
   utils::Tic("Static map fusion");
-  if (use_orbslam_vo &&  !orbSLAM2_Pose.empty()) {
+  if (use_orbslam_vo_ &&  !orbSLAM2_Pose.empty()) {
        static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_, currBAKFTime);
        static_scene_->IntegrateLocalMap(currentLocalMap);
+       
+       if(mfusionFrameDataBase.size() > slide_window_.max_age && slide_window_.enabled){
+         utils::Tic("Slide Window");
+         SlideWindowMap();
+	 SlideWindowPose();
+         utils::Toc();
+       }
+       
        utils::Tic("Map decay");
        Decay();
        utils::Toc();
@@ -212,6 +224,14 @@ void DenseSlam::ProcessFrame(Input *input) {
    else{
 //       static_scene_->UpdateView(input_rgb_image_copy_, input_raw_depth_image_copy_);
          static_scene_->IntegrateLocalMap(currentLocalMap);
+	 
+	 if(mfusionFrameDataBase.size() > slide_window_.max_age && slide_window_.enabled){
+	    utils::Tic("Slide Window");
+            SlideWindowMap();
+	    SlideWindowPose();
+            utils::Toc();
+	 }
+	 
 	 utils::Tic("Map decay");
          Decay();
          utils::Toc();
@@ -241,6 +261,20 @@ bool DenseSlam::is_identity_matrix(cv::Mat matrix){
   }
   if(flags == 0) {return false;}
   else {return true;}
+}
+
+void DenseSlam::SlideWindowPose(){
+     int DataBaseSize = mfusionFrameDataBase.size();
+     int cullSize = DataBaseSize - slide_window_.max_age;
+     map<double, fusionFrameInfo>::iterator iter= mfusionFrameDataBase.begin();
+     int count = 0;
+     for(iter; iter!=mfusionFrameDataBase.end(); iter++){
+       mfusionFrameDataBase.erase(iter);
+       count ++;
+       if(count > (cullSize-1)){
+	 break;
+      }
+    }
 }
 
 bool DenseSlam::OnlineCorrection(){
@@ -313,7 +347,7 @@ bool DenseSlam::OnlineCorrection(){
   
   //当找到的位姿误差大于10帧了
   //在线调整的帧数
-  int correctNum = online_correction.CorrectionNum;
+  int correctNum = online_correction_.CorrectionNum;
   if(mapPoseError.size()>10){
     
      int countNum = 0;
@@ -429,8 +463,10 @@ bool DenseSlam::depthPostProcessing(double currBAKFTime){
 // 	        combineImg.at<uint8_t>(row,col) = prev_gray.at<uint8_t>(row,col);
 // 	     }
 // 	   }
-	
-// 	   imshow("previous depth", curr_depth);
+	   
+	   if(post_processing_.show_post_processing){
+ 	      imshow("previous depth", curr_depth);
+	   }
 	   for(int row=0; row < curr_depth.rows; row++){
  	      for(int col=0; col < curr_depth.cols; col++){
 	        cv::Mat depth_curr_coord = cv::Mat::ones(3,1,CV_32FC1);
@@ -466,7 +502,7 @@ bool DenseSlam::depthPostProcessing(double currBAKFTime){
 	        float curr_gray_intensity =  depth_prev_coord.at<float>(2,0);
 	        float diff_depth = abs(prev_gray_intensity - curr_gray_intensity);
 	     
-	        if((diff_depth/curr_gray_intensity) > post_processing.filterThreshold && row > post_processing.filterArea * curr_depth.rows){
+	        if((diff_depth/curr_gray_intensity) > post_processing_.filterThreshold && row > post_processing_.filterArea * curr_depth.rows){
 	           curr_depth.at<int16_t>(row,col) = 0;
 // 	           cv::line(combineImg, cv::Point(col,row), cv::Point(prev_gray.cols+col_v, row_u), cv::Scalar(0,0,0), 1, 8);
 	        }
@@ -481,8 +517,10 @@ bool DenseSlam::depthPostProcessing(double currBAKFTime){
       ///当前关键帧的深度以及颜色信息
       input_rgb_image_copy_ = (iter_curr->second.rgbinfoc).clone();  
       input_raw_depth_image_copy_ = curr_depth.clone();
-//       cv::imshow("filted depth: ", input_raw_depth_image_copy_);
-//       cv::waitKey(0);
+      if(post_processing_.show_post_processing){
+        cv::imshow("filted depth: ", input_raw_depth_image_copy_);
+        cv::waitKey(0);
+      }
       input_weight_copy_ = (iter_curr->second.depthweightinfoc).clone();
       
       //删除mframeDataBase和iter中间所有的元素
@@ -515,7 +553,7 @@ int DenseSlam::createNewLocalMap(ITMLib::Objects::ITMPose& GlobalPose){
 
 void DenseSlam::SaveRaycastDepth(const std::string &dataset_name, const string &fname_format) {
   
-    if(mfusionFrameDataBaseForRaycast.size() > save_raycastdepth.delayNum){
+    if(mfusionFrameDataBaseForRaycast.size() > save_raycastdepth_.delayNum){
         map<double, fusionFrameInfo>::iterator raycast_iter = mfusionFrameDataBaseForRaycast.begin();
         cv::Mat raycast_pose = raycast_iter->second.poseinfo.inv();
         pangolin::OpenGlMatrix pm_raycast(ORB_SLAM2::drivers::MatToEigen(raycast_pose));
@@ -523,7 +561,7 @@ void DenseSlam::SaveRaycastDepth(const std::string &dataset_name, const string &
         /// NOTE 光线投影回来的深度图
      
         cv::Mat tempRaycastShort(raycast_iter->second.depthinfo.rows, raycast_iter->second.depthinfo.cols, CV_16UC1);
-        const float* tempRaycastDepth = GetRaycastDepthPreview(pm_raycast, static_cast<PreviewType>(current_preview_depth_type), save_raycastdepth.compositing_dense); 
+        const float* tempRaycastDepth = GetRaycastDepthPreview(pm_raycast, static_cast<PreviewType>(current_preview_depth_type), save_raycastdepth_.compositing_dense); 
         //将raycast depth转成16位
         SparsetoDense::FloatDepthmapToInt16(tempRaycastDepth, tempRaycastShort);
      
@@ -534,14 +572,14 @@ void DenseSlam::SaveRaycastDepth(const std::string &dataset_name, const string &
         string imgSavePath = target_folder + "/" + index;
         cv::imwrite(imgSavePath, tempRaycastShort);
         raycast_iter++;
-	if(!save_raycastrgb.enabled){
+	if(!save_raycastrgb_.enabled){
            mfusionFrameDataBaseForRaycast.erase(mfusionFrameDataBaseForRaycast.begin(), raycast_iter);
 	}
    }
 }
 
 void DenseSlam::SaveRaycastRGB(const std::string &dataset_name, const string &fname_format) {
-     if(mfusionFrameDataBaseForRaycast.size() > save_raycastrgb.delayNum){
+     if(mfusionFrameDataBaseForRaycast.size() > save_raycastrgb_.delayNum){
         map<double, fusionFrameInfo>::iterator raycast_iter = mfusionFrameDataBaseForRaycast.begin();
         cv::Mat raycast_pose = raycast_iter->second.poseinfo.inv();
         pangolin::OpenGlMatrix pm_raycast(ORB_SLAM2::drivers::MatToEigen(raycast_pose));

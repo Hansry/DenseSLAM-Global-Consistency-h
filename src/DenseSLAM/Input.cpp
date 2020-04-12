@@ -204,6 +204,10 @@ void Input::ReadRightGray(T frame_idx, cv::Mat1b &out) const {
 /// @brief 读取id为frame_idx的left color image,支持scale,最近邻插值
 template<typename T>
 void Input::ReadLeftColor(T frame_idx, cv::Mat3b &out) const {
+//   cout << "Input.cpp: 207 left image" << GetFrameName(dataset_folder_,
+//                                           config_.left_color_folder,
+//                                           config_.fname_format,
+//                                           frame_idx) << endl;
   cv::Mat3b buf = cv::imread(GetFrameName(dataset_folder_,
                                           config_.left_color_folder,
                                           config_.fname_format,
@@ -214,6 +218,10 @@ void Input::ReadLeftColor(T frame_idx, cv::Mat3b &out) const {
 /// @brief 读取id为frame_idx的right color image，支持scale,最近邻插值
 template<typename T>
 void Input::ReadRightColor(T frame_idx, cv::Mat3b &out) const {
+//   cout << "Input.cpp: 221 right image" << GetFrameName(dataset_folder_,
+//                                           config_.right_color_folder,
+//                                           config_.fname_format,
+//                                           frame_idx) << endl;
   cv::Mat3b buf = cv::imread(GetFrameName(dataset_folder_,
                                           config_.right_color_folder,
                                           config_.fname_format,

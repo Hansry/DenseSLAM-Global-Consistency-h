@@ -28,7 +28,7 @@ forget it, just run `git submodule update --init --recursive`.
     ```
  5. Build g2o to make sure it gets put into CMake registry:
     ```bash
-    cd src/ORB-SLAM2-API-M/Thirdparty/g2o_with_orbslam2 && mkdir build/ && cd $_ && cmake ../ && make -j$(nproc)
+    cd src/ORB-SLAM2-API-M/Thirdparty/g2o_with_orbslam2 && mkdir build && cd build && cmake .. && make -j$(nproc) && sudo make install
     ```
  6. Build the project in the standard CMake fashion:
     ```bash
@@ -36,7 +36,7 @@ forget it, just run `git submodule update --init --recursive`.
     ```
 
 ### Demo Sequence
-  After building the project, try processing the demo sequence: [here is a short sample from KITTI 2011_09_30_drive_0033_sync](https://pan.baidu.com/s/1WVYVVWjbijLDcnHPnMEWsQ) and the password is `baes`.
+  After building the project, try processing the demo sequence: [here is a short sample from KITTI 2011_09_30_drive_0033_sync](https://pan.baidu.com/s/1Ufy_I_Uc2dTlzvnhqiKdeQ) and the password is `fwax`.
 
   1. Extract that to a directory, and run DenseSLAM on it (the mkdir circumvents a silly bug):
         ```bash
@@ -44,6 +44,7 @@ forget it, just run `git submodule update --init --recursive`.
         ```
   2. Note that:
      
-     sesor_type:  =0 means MONOCULAR, =1 means STEREO, =2 means RGBD
+     sesor_type:  =0 means MONOCULAR, =1 means STEREO, =2 means RGBD;
+
      dataset_type: =0 meas KITTI dataset, =1 means TUM dataset, =2 means ICLNUIM dataset
 

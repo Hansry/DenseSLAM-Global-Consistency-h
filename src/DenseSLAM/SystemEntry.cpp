@@ -4,9 +4,6 @@
 #include <dirent.h>
 #include "Utils.h"
 
-const std::string kKittiOdometry = "kitti-odometry";
-const std::string kKittiTracking = "kitti-tracking";
-const std::string kKitti         = "kitti";
 const std::string ORBVocPath = "../src/ORB-SLAM2-API-M/Vocabulary/ORBvoc.txt";
 
 //将需要的命令行参数使用gflags的宏:DEFINE_xxxx(变量名，默认值，help-string)定义在文件当中，全局变量，存储在区全局区中
@@ -145,6 +142,12 @@ void BuildDenseSlamOdometry(const string &dataset_root,
       params["max_decay_weight"]
   );
   
+  int use_slide_window = params["slide_window"];
+  SlideWindowParams slide_window_params(
+      (bool)use_slide_window,
+      params["max_age"]
+  );
+  
   int use_online_correction = params["online_correction"];
   OnlineCorrectionParams online_correction_params{
       (bool)use_online_correction,
@@ -152,8 +155,10 @@ void BuildDenseSlamOdometry(const string &dataset_root,
   };
   
   int use_post_processing = params["post_processing"];
+  int show_post_processing = params["show_post_processing"];
   PostPocessParams post_processing_params{
      (bool)use_post_processing,
+     (bool)show_post_processing,
      params["filter_threshold"],
      params["filter_area"]
   };
@@ -243,6 +248,7 @@ void BuildDenseSlamOdometry(const string &dataset_root,
       SparsetoDense::drivers::ToItmVec((*input_out)->GetRgbSize()),
       SparsetoDense::drivers::ToItmVec((*input_out)->GetDepthSize()),
       voxel_decay_params,
+      slide_window_params,
       depth_weighting_params);  
    
   //与ORB_SLAM2的接口
@@ -266,6 +272,7 @@ void BuildDenseSlamOdometry(const string &dataset_root,
       FLAGS_direct_refinement,
       post_processing_params,
       online_correction_params,
+      slide_window_params,
       raycast_depth_params,
       raycast_rgb_params,
       (bool)use_orbslam_vo

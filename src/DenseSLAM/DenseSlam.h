@@ -93,6 +93,7 @@ class DenseSlam {
           bool enable_direct_refinement,
           PostPocessParams post_processing,
 	  OnlineCorrectionParams online_correction,
+	  SlideWindowParams slide_window,
 	  SaveRaycastDepthParams raycast_depth,
 	  SaveRaycastRGBParams raycast_rgb,
 	  bool use_orbslam_vo)
@@ -110,11 +111,12 @@ class DenseSlam {
       pose_history_({ Eigen::Matrix4f::Identity() }),
       projection_left_rgb_(proj_left_rgb),
       stereo_baseline_mm_(stereo_baseline_mm),
-      online_correction(online_correction),
-      post_processing(post_processing),
-      save_raycastdepth(raycast_depth),
-      save_raycastrgb(raycast_rgb),
-      use_orbslam_vo(use_orbslam_vo)
+      online_correction_(online_correction),
+      slide_window_(slide_window),
+      post_processing_(post_processing),
+      save_raycastdepth_(raycast_depth),
+      save_raycastrgb_(raycast_rgb),
+      use_orbslam_vo_(use_orbslam_vo)
   {
       mFeatures_ = ExtractKeyPointNum();
       mGoalFeatures_ = 0.5 * mFeatures_;
@@ -206,6 +208,13 @@ public:
     }
   }
   
+  void SlideWindowMap(){
+    if(currentLocalMap != NULL){
+       static_scene_->SlideWindow(currentLocalMap);
+    }
+  }
+  
+  
   void DecayCatchup(){
     if(currentLocalMap != NULL){
       static_scene_->DecayCatchup(currentLocalMap);
@@ -240,6 +249,7 @@ public:
   }
   
   bool OnlineCorrection();
+  void SlideWindowPose();
   
   bool depthPostProcessing(double currBAKFTime);
   
@@ -427,11 +437,12 @@ private:
   InfiniTamDriver *static_scene_;
   ORB_SLAM2::drivers::OrbSLAMDriver *orbslam_static_scene_;
   
-  PostPocessParams post_processing;
-  OnlineCorrectionParams online_correction;
-  SaveRaycastDepthParams save_raycastdepth;
-  SaveRaycastRGBParams save_raycastrgb;
-  bool use_orbslam_vo;
+  PostPocessParams post_processing_;
+  OnlineCorrectionParams online_correction_;
+  SlideWindowParams slide_window_;
+  SaveRaycastDepthParams save_raycastdepth_;
+  SaveRaycastRGBParams save_raycastrgb_;
+  bool use_orbslam_vo_;
   
   double currFrameTimeStamp;
   int64_t fusionTotalTime = 0; 

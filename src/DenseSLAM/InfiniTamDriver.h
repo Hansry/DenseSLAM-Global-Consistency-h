@@ -94,6 +94,7 @@ public:
       const Vector2i &img_size_rgb,
       const Vector2i &img_size_d,
       const VoxelDecayParams &voxel_decay_params,
+      const SlideWindowParams &slide_window_params,
       ITMLib::Engine::WeightParams depth_weighting)
       : ITMLib::Engine::ITMMainEngine(settings, calib, img_size_rgb, img_size_d),
         rgb_itm_(new ITMUChar4Image(img_size_rgb, true, true)),
@@ -103,7 +104,8 @@ public:
         rgb_cv_local_map_(new cv::Mat3b(img_size_rgb.height, img_size_rgb.width)),
         raw_depth_cv_local_map_(new cv::Mat1s(img_size_d.height, img_size_d.width)),
         last_egomotion_(new Eigen::Matrix4f),
-        voxel_decay_params_(voxel_decay_params)
+        voxel_decay_params_(voxel_decay_params),
+        slide_window_params_(slide_window_params)
   {
     last_egomotion_->setIdentity();
     fusion_weight_params_ = depth_weighting;
@@ -273,6 +275,14 @@ public:
                          true);
     }
   }
+  
+  void SlideWindow(const ITMLocalMap* currentLocalMap) {
+    if (slide_window_params_.enabled) {
+      denseMapper->SlideWindow(currentLocalMap->scene, 
+                         currentLocalMap->renderState, 
+                         slide_window_params_.max_age);
+    }
+  }
 
   /// \brief Goes through all remaining visible lists until present time, triggering garbage
   /// collection for all of them. Should not be used mid-sequence.
@@ -373,6 +383,8 @@ SUPPORT_EIGEN_FIELDS;
 
   // Parameters for voxel decay (map regularization). 类似于像素滤波？
   VoxelDecayParams voxel_decay_params_;
+  
+  SlideWindowParams slide_window_params_;
 };
 
 } // namespace drivers

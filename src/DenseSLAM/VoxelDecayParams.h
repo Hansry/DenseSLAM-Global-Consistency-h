@@ -5,15 +5,25 @@
 namespace SparsetoDense {
 
 struct VoxelDecayParams {
-  /// \brief Whether to enable voxel decay.
+  /// Whether to enable voxel decay.
   bool enabled;
-  /// \brief Voxels older than this are eligible for decay.
+  /// Voxels older than this are eligible for decay.
   int min_decay_age;
-  /// \brief Voxels with a weight smaller than this are decayed, provided that they are old enough.
+  /// Voxels with a weight smaller than this are decayed, provided that they are old enough.
   int max_decay_weight;
 
   VoxelDecayParams(bool enabled, int min_decay_age, int max_decay_weight)
       : enabled(enabled), min_decay_age(min_decay_age), max_decay_weight(max_decay_weight) {}
+};
+
+struct SlideWindowParams {
+  bool enabled;
+  
+  /// Voxels older than this are eligible for deletion.
+  int max_age;
+  
+  SlideWindowParams(bool enabled, int max_age)
+       : enabled(enabled), max_age(max_age) {}
 };
 
 struct OnlineCorrectionParams {
@@ -26,11 +36,12 @@ struct OnlineCorrectionParams {
 
 struct PostPocessParams{
   bool enabled;
+  bool show_post_processing;
   float filterThreshold;
   float filterArea;
   
-  PostPocessParams(bool enabled, float filterThreshold, float filterArea)
-       : enabled(enabled), filterThreshold(filterThreshold), filterArea(filterArea) {}
+  PostPocessParams(bool enabled, bool show_post_processing, float filterThreshold, float filterArea)
+       : enabled(enabled), show_post_processing(show_post_processing), filterThreshold(filterThreshold), filterArea(filterArea) {}
 };
 
 struct SaveRaycastDepthParams{
