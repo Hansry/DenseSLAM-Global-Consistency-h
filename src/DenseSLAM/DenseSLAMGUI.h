@@ -169,6 +169,8 @@ protected:
   /// Input frame dimensions. They dictate the overall window size.
   /// 通过输入的图像大小来定义界面的大小
   int width_, height_;
+  
+  Vector2i main_view_size_;
 
   pangolin::View *main_view_;
   pangolin::View *orbslam_view_;

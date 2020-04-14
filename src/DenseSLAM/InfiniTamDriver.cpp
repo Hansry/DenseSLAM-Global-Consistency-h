@@ -136,6 +136,25 @@ void ItmToCvMat(const ITMUChar4Image *itm, cv::Mat& out_mat) {
   }
 }
 
+void ResizeRaycastDepthGUI(const ITMUChar4Image *itm, const Vector2i srcSize, const Vector2i dstSize, cv::Mat& dstImg){
+  const Vector4u *itm_data = itm->GetData(MemoryDeviceType::MEMORYDEVICE_CPU);
+  cv::Mat srcImg(srcSize.height, srcSize.width, CV_8UC3);
+  for (int i = 0; i < srcImg.rows; ++i) {
+    for (int j = 0; j < srcImg.cols; ++j) {
+       srcImg.at<cv::Vec3b>(i, j) = cv::Vec3b(
+          itm_data[i * srcImg.cols + j].b,
+          itm_data[i * srcImg.cols + j].g,
+          itm_data[i * srcImg.cols + j].r
+      );
+    }
+  }
+//   cv::imshow("before resize srcImg: ", srcImg);
+  cv::Size outputImgSize(dstSize.width, dstSize.height);
+  cv::resize(srcImg, dstImg, outputImgSize, 0, 0, CV_INTER_CUBIC);
+//   cv::imshow("resize srcImg:", dstImg);
+//   cv::waitKey(0);
+}
+
 void Char4RGBToUC3(const unsigned char *pixels, cv::Mat &out_mat) {
   for (int i = 0; i < out_mat.rows; ++i) {
     for (int j = 0; j < out_mat.cols; j+=3) {

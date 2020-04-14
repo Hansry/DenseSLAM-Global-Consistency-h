@@ -105,8 +105,17 @@ void PangolinGui::Run(){
       /// NOTE 是否在chase cam模式下预览重建，第三视角
       if (paramGUI.chase_cam) 
       {
-        Eigen::Matrix4f cam_mv = dense_slam_->GetPose().inverse();
+	Eigen::Matrix4f currDenseMapPose;
+	if(dense_slam_->GetCurrentLocalMap() != NULL){
+              currDenseMapPose = drivers::ItmToEigen(dense_slam_->GetCurrentLocalMap()->estimatedGlobalPose.GetM()); //Tdw
+        }
+        else{
+	      currDenseMapPose = Eigen::Matrix4f::Identity(4,4);
+        }
+        Eigen::Matrix4f cam_mv =  (currDenseMapPose * dense_slam_->GetPose()).inverse();
+	Eigen::Matrix4f cam_mv_orb = dense_slam_->GetPose().inverse();
         pangolin::OpenGlMatrix pm(cam_mv);
+	pangolin::OpenGlMatrix pm_orb(cam_mv_orb);
 	if(dense_slam_input_->GetDatasetType() == Input::KITTI){
         pm =
             // Good for odo 05
@@ -114,6 +123,12 @@ void PangolinGui::Run(){
              pangolin::OpenGlMatrix::RotateX(M_PI * 0.5 * 0.03f) *
              pangolin::OpenGlMatrix::Translate(-0.5, 2.0, 20.0) *
              pm;
+	     
+	pm_orb = 
+	     pangolin::OpenGlMatrix::RotateY(M_PI * 0.5 * 0.05f) *
+             pangolin::OpenGlMatrix::RotateX(M_PI * 0.5 * 0.03f) *
+             pangolin::OpenGlMatrix::Translate(-0.5, 2.0, 20.0) *
+             pm_orb;
 	}
 	else if(dense_slam_input_->GetDatasetType() == Input::TUM || dense_slam_input_->GetDatasetType() == Input::ICLNUIM){
 	 pm =
@@ -122,12 +137,18 @@ void PangolinGui::Run(){
             pangolin::OpenGlMatrix::RotateX(M_PI * 0.5 * 0.03f) *
             pangolin::OpenGlMatrix::Translate(-0.5, 0.0, 2.0) *
             pm;
+	    
+	 pm_orb =
+	    pangolin::OpenGlMatrix::RotateY(M_PI * 0.5 * 0.05f) *
+            pangolin::OpenGlMatrix::RotateX(M_PI * 0.5 * 0.03f) *
+            pangolin::OpenGlMatrix::Translate(-0.5, 2.0, 20.0) *
+            pm_orb;
 	}
 	else{
 	  runtime_error("Currently not support this dataset type!");
 	}
          pane_cam_->SetModelViewMatrix(pm);
-	 orb_pane_cam_->SetModelViewMatrix(pm);
+	 orb_pane_cam_->SetModelViewMatrix(pm_orb);
       }
 
       int evaluated_frame_idx = dense_slam_->GetCurrentFrameNo() - 1 - paramGUI.evaluation_delay;
@@ -212,7 +233,15 @@ void PangolinGui::Run(){
       glColor3f(1.0,1.0,1.0);
       cv::Size2i tempRaycastDepthSize = dense_slam_input_->GetDepthSize();
       cv::Mat1s *tempRaycastShort = new cv::Mat1s(tempRaycastDepthSize.height, tempRaycastDepthSize.width);
-      Eigen::Matrix4f cam_raycast = dense_slam_->GetPose().inverse();
+      
+      Eigen::Matrix4f currDenseMapPose;
+      if(dense_slam_->GetCurrentLocalMap() != NULL){
+          currDenseMapPose = drivers::ItmToEigen(dense_slam_->GetCurrentLocalMap()->estimatedGlobalPose.GetM()); //Tdw
+      }
+      else{
+	  currDenseMapPose = Eigen::Matrix4f::Identity(4,4);
+      }
+      Eigen::Matrix4f cam_raycast = (currDenseMapPose * dense_slam_->GetPose()).inverse();//Tsd = (Tds).inverse() = (Tdw * Twc).inverse()
       pangolin::OpenGlMatrix pm_raycast(cam_raycast);
       /// NOTE 光线投影回来的深度图
       const float* tempRaycastDepth = dense_slam_ -> GetRaycastDepthPreview(pm_raycast, static_cast<PreviewType>(current_preview_depth_type), enable_compositing_dense);

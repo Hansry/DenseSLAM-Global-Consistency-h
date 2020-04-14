@@ -22,4 +22,5 @@ data/
 mesh_out/
 raycastdepth/
 raycastRGB/
+depth_annotated/
 raw-data-archives/

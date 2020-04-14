@@ -54,6 +54,8 @@ void ItmToCv(const ITMUChar4Image &itm, cv::Mat3b *out_mat);
 
 void ItmToCvMat(const ITMUChar4Image *itm, cv::Mat &out_mat);
 
+void ResizeRaycastDepthGUI(const ITMUChar4Image *itm, const Vector2i srcSize, const Vector2i dstSize, cv::Mat& outputImg);
+
 /// \brief 将RGBA图像从uchar转换为OpenCV RGB mat格式，丢弃掉alpha通道的信息
 void Char4RGBToUC3(const unsigned char *pixels, cv::Mat &out_mat);
 

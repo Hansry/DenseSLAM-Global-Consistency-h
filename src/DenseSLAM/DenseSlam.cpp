@@ -96,6 +96,7 @@ void DenseSlam::ProcessFrame(Input *input) {
   }
   
   double currBAKFTime = mcurrBAKeyframe->mTimeStamp;
+  //世界坐标系到当前帧坐标系的变换矩阵
   orbSLAM2_Pose = mcurrBAKeyframe->GetPoseInverse();
   
   utils::Tic("Depth of fusion frame update and post processing !");
@@ -134,6 +135,7 @@ void DenseSlam::ProcessFrame(Input *input) {
     int currentLocalMapIdx = static_scene_->GetMapManager()->createNewLocalMap();
     ITMLib::Objects::ITMPose tempPose;
     //InvM指世界坐标系到相机的变换
+    //将orbslam地图的第一帧看做是世界坐标系，因此在构建稠密地图的时候需要设置世界坐标系到稠密地图第一帧的变换矩阵
     tempPose.SetInvM(drivers::EigenToItm(ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)));
     static_scene_->GetMapManager()->setEstimatedGlobalPose(currentLocalMapIdx, tempPose);
     todoList.push_back(TodoListEntry(currentLocalMapIdx,
@@ -189,7 +191,7 @@ void DenseSlam::ProcessFrame(Input *input) {
     if(shouldClearPoseHistory){
 	  pose_history_.clear();
     }
-    pose_history_.push_back((currLocalMapPose*ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)).inverse());
+    pose_history_.push_back((currLocalMapPose * ORB_SLAM2::drivers::MatToEigen(orbSLAM2_Pose)).inverse());
     shouldClearPoseHistory = false;
   }
   /// 使用内部使用的里程计
@@ -555,7 +557,12 @@ void DenseSlam::SaveRaycastDepth(const std::string &dataset_name, const string &
   
     if(mfusionFrameDataBaseForRaycast.size() > save_raycastdepth_.delayNum){
         map<double, fusionFrameInfo>::iterator raycast_iter = mfusionFrameDataBaseForRaycast.begin();
-        cv::Mat raycast_pose = raycast_iter->second.poseinfo.inv();
+	// Tsd = (Tdw * Tws).inv() 
+        Eigen::Matrix4f currLocalMapPose = drivers::ItmToEigen(currentLocalMap->estimatedGlobalPose.GetM()); //Tdw
+	cv::Mat currDenseMapPose = ORB_SLAM2::drivers::EigenToMat(currLocalMapPose); //Tdw
+	
+        cv::Mat raycast_pose = (currDenseMapPose * raycast_iter->second.poseinfo).inv();
+	
         pangolin::OpenGlMatrix pm_raycast(ORB_SLAM2::drivers::MatToEigen(raycast_pose));
         int current_preview_depth_type = PreviewType::kRaycastDepth;
         /// NOTE 光线投影回来的深度图
@@ -581,7 +588,12 @@ void DenseSlam::SaveRaycastDepth(const std::string &dataset_name, const string &
 void DenseSlam::SaveRaycastRGB(const std::string &dataset_name, const string &fname_format) {
      if(mfusionFrameDataBaseForRaycast.size() > save_raycastrgb_.delayNum){
         map<double, fusionFrameInfo>::iterator raycast_iter = mfusionFrameDataBaseForRaycast.begin();
-        cv::Mat raycast_pose = raycast_iter->second.poseinfo.inv();
+	
+	// Tsd = (Tdw * Tws).inv() 
+        Eigen::Matrix4f currLocalMapPose = drivers::ItmToEigen(currentLocalMap->estimatedGlobalPose.GetM()); //Tdw
+	cv::Mat currDenseMapPose = ORB_SLAM2::drivers::EigenToMat(currLocalMapPose); //Tdw
+        cv::Mat raycast_pose = (currDenseMapPose * raycast_iter->second.poseinfo).inv();
+	
         pangolin::OpenGlMatrix pm_raycast(ORB_SLAM2::drivers::MatToEigen(raycast_pose));
         int current_preview_depth_type = PreviewType::kColor;
         /// NOTE 光线投影回来的深度图
