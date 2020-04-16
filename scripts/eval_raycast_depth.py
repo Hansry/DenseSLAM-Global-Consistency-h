@@ -26,7 +26,6 @@ def depth_read(filename):
     assert os.path.exists(filename), "file not found: {}".format(filename)
     img_file = Image.open(filename)
     depth_png = np.array(img_file, dtype=int)
-    print("depth_png", depth_png)
     img_file.close()
     # make sure we have a proper 16bit depth map here.. not 8bit!
     assert np.max(depth_png) > 255, \
@@ -37,6 +36,7 @@ def depth_read(filename):
     # depth = np.expand_dims(depth,-1) #(x,y) -> (1,x,y)
     return depth
 
+
 def depth_gt_dilate(depth):
     #dilate the depth map
    kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(3, 3))
@@ -45,7 +45,7 @@ def depth_gt_dilate(depth):
    return depth_dilated
 
 if __name__ == "__main__":
-   depth_raycast_set = sorted(glob.glob("../raycastdepth/2011_09_26_drive_0079_sync/*.png"))
+   depth_raycast_set = sorted(glob.glob("../raycastdepth/2011_09_26_drive_0002_sync/*.png"))
    depth_pre_prefix_path = "../data/KITTI"
    depth_annotated_prefix_path = "../depth_annotated"
    avg_mae = 0 
@@ -76,13 +76,13 @@ if __name__ == "__main__":
        depth_pred_path = os.path.join(depth_pre_prefix_path, sub_dataset, "precomputed-depth", depth_index)
        depth_annotated_path = os.path.join(depth_annotated_prefix_path, sub_dataset, "proj_depth/groundtruth/image_02", depth_index)
 
-       print(depth_path)
+ #      print(depth_path)
        depth_raycast = depth_read(depth_path)
 
-       print(depth_pred_path)
+ #      print(depth_pred_path)
        depth_pred = depth_read(depth_pred_path)
 
-       print(depth_annotated_path)
+ #      print(depth_annotated_path)
        depth_annotated = depth_read(depth_annotated_path)
        
 

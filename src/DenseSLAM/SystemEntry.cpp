@@ -151,7 +151,7 @@ void BuildDenseSlamOdometry(const string &dataset_root,
   int use_online_correction = params["online_correction"];
   OnlineCorrectionParams online_correction_params{
       (bool)use_online_correction,
-      params["Online_correction_num"]
+      params["online_correction_num"]
   };
   
   int use_post_processing = params["post_processing"];

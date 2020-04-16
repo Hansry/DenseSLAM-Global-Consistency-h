@@ -215,7 +215,9 @@ void DenseSlam::ProcessFrame(Input *input) {
        if(mfusionFrameDataBase.size() > slide_window_.max_age && slide_window_.enabled){
          utils::Tic("Slide Window");
          SlideWindowMap();
+	 cout << "mfusionFrameDataBase size 218:" << mfusionFrameDataBase.size() << endl;
 	 SlideWindowPose();
+	 cout << "mfusionFrameDataBase size 220:" << mfusionFrameDataBase.size() << endl;
          utils::Toc();
        }
        
@@ -351,7 +353,7 @@ bool DenseSlam::OnlineCorrection(){
   //在线调整的帧数
   int correctNum = online_correction_.CorrectionNum;
   if(mapPoseError.size()>10){
-    
+     
      int countNum = 0;
      map<float,mapKeyframeInfo,greater<float>>::iterator errorIter;
      for(errorIter=mapPoseError.begin(); errorIter!=mapPoseError.end(); errorIter++){

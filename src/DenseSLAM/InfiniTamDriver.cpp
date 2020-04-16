@@ -185,14 +185,14 @@ void ItmToCv(const ITMShortImage &itm, cv::Mat1s *out_mat) {
 }
 
 void FloatDepthmapToInt16(const float *pixels, cv::Mat &out_mat) {
-  const int kMetersToMillimeters = 1000;
+  const int saveScaleFactor = 256;
 //   int count = 0;
   for (int i = 0; i < out_mat.rows; ++i) {
     for (int j = 0; j < out_mat.cols; ++j) {
       /// ITM internal: depth = meters, float
       /// Our preview:  depth = mm, short int
       out_mat.at<int16_t>(i, j) = static_cast<int16_t>(
-          pixels[i * out_mat.cols + j] * kMetersToMillimeters
+          pixels[i * out_mat.cols + j] * saveScaleFactor
       );
     }
   }
