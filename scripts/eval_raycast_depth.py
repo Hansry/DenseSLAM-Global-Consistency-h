@@ -45,7 +45,7 @@ def depth_gt_dilate(depth):
    return depth_dilated
 
 if __name__ == "__main__":
-   depth_raycast_set = sorted(glob.glob("../raycastdepth/2011_09_26_drive_0002_sync/*.png"))
+   depth_raycast_set = sorted(glob.glob("../raycastdepth/2011_09_30_drive_0033_sync/*.png"))
    depth_pre_prefix_path = "../data/KITTI"
    depth_annotated_prefix_path = "../depth_annotated"
    avg_mae = 0 

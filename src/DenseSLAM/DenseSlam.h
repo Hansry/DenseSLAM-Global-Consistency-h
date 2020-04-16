@@ -208,12 +208,23 @@ public:
     }
   }
   
+  void DecayDefusionPart(){
+    if(currentLocalMap != NULL){
+      static_scene_->DecayDefusionPart(currentLocalMap);
+    }
+  }
+  
   void SlideWindowMap(){
     if(currentLocalMap != NULL){
        static_scene_->SlideWindow(currentLocalMap);
     }
   }
   
+  void SlideWindowMapDefusionPart(){
+    if(currentLocalMap != NULL){
+       static_scene_->SlideWindowDefusionPart(currentLocalMap);
+    }
+  }
   
   void DecayCatchup(){
     if(currentLocalMap != NULL){

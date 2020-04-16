@@ -97,6 +97,7 @@ public:
       const Vector2i &img_size_d,
       const VoxelDecayParams &voxel_decay_params,
       const SlideWindowParams &slide_window_params,
+      const OnlineCorrectionParams &online_correction_params,
       ITMLib::Engine::WeightParams depth_weighting)
       : ITMLib::Engine::ITMMainEngine(settings, calib, img_size_rgb, img_size_d),
         rgb_itm_(new ITMUChar4Image(img_size_rgb, true, true)),
@@ -107,7 +108,8 @@ public:
         raw_depth_cv_local_map_(new cv::Mat1s(img_size_d.height, img_size_d.width)),
         last_egomotion_(new Eigen::Matrix4f),
         voxel_decay_params_(voxel_decay_params),
-        slide_window_params_(slide_window_params)
+        slide_window_params_(slide_window_params),
+        online_correction_params_(online_correction_params)
   {
     last_egomotion_->setIdentity();
     fusion_weight_params_ = depth_weighting;
@@ -182,10 +184,11 @@ public:
   }
   
   /// @brief 融合局部地图
-  void IntegrateLocalMap(const ITMLocalMap* currLocalMap) const{
+  void IntegrateLocalMap(const ITMLocalMap* currLocalMap, 
+			 bool onlyUpdateVisibleList=false, bool isDefusion = false) const{
     this->denseMapper->SetFusionWeightParams(fusion_weight_params_);
     this->denseMapper->ProcessFrame(
-      this->view, currLocalMap->trackingState, currLocalMap->scene, currLocalMap->renderState);
+      this->view, currLocalMap->trackingState, currLocalMap->scene, currLocalMap->renderState, onlyUpdateVisibleList, isDefusion);
   }
   
   /// @brief 对局部地图进行反融合
@@ -197,7 +200,7 @@ public:
 
   /// @brief 对于主局部地图而言，调用了PrepareNextStepLocalMap
   void PrepareNextStep() {
-     ITMLocalMap* PrimaryLocalMap = GetPrimaryLocalMap();
+      ITMLocalMap* PrimaryLocalMap = GetPrimaryLocalMap();
       PrepareNextStepLocalMap(PrimaryLocalMap);
   }
   
@@ -278,11 +281,31 @@ public:
     }
   }
   
+  void DecayDefusionPart(const ITMLocalMap* currentLocalMap){
+    if(voxel_decay_params_.enabled){
+      denseMapper->DecayDefusionPart(currentLocalMap->scene,
+	                         currentLocalMap->renderState, 
+                                 voxel_decay_params_.max_decay_weight,
+                                 voxel_decay_params_.min_decay_age, 
+                                 true);
+    }
+  }
+  
   void SlideWindow(const ITMLocalMap* currentLocalMap) {
     if (slide_window_params_.enabled) {
       denseMapper->SlideWindow(currentLocalMap->scene, 
                          currentLocalMap->renderState, 
                          slide_window_params_.max_age);
+    }
+  }
+  
+  void SlideWindowDefusionPart(const ITMLocalMap* currentLocalMap) {
+    if (slide_window_params_.enabled) {
+      int maxSize = (slide_window_params_.max_age - online_correction_params_.StartToCorrectionNum) * online_correction_params_.CorrectionNum;
+      denseMapper->SlideWindowDefusionPart(currentLocalMap->scene, 
+                         currentLocalMap->renderState, 
+                         slide_window_params_.max_age,
+			 maxSize);
     }
   }
 
@@ -387,6 +410,8 @@ SUPPORT_EIGEN_FIELDS;
   VoxelDecayParams voxel_decay_params_;
   
   SlideWindowParams slide_window_params_;
+  
+  OnlineCorrectionParams online_correction_params_;
 };
 
 } // namespace drivers

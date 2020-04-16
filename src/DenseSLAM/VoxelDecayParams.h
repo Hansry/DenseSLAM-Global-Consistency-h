@@ -29,9 +29,10 @@ struct SlideWindowParams {
 struct OnlineCorrectionParams {
   bool enabled;
   int CorrectionNum;
+  int StartToCorrectionNum;
   
-  OnlineCorrectionParams(bool enabled, int CorrectionNum) 
-        : enabled(enabled), CorrectionNum(CorrectionNum) {}
+  OnlineCorrectionParams(bool enabled, int CorrectionNum, int StartToCorrectionNum) 
+        : enabled(enabled), CorrectionNum(CorrectionNum), StartToCorrectionNum(StartToCorrectionNum) {}
 };
 
 struct PostPocessParams{

@@ -215,14 +215,20 @@ void DenseSlam::ProcessFrame(Input *input) {
        if(mfusionFrameDataBase.size() > slide_window_.max_age && slide_window_.enabled){
          utils::Tic("Slide Window");
          SlideWindowMap();
-	 cout << "mfusionFrameDataBase size 218:" << mfusionFrameDataBase.size() << endl;
+	 if(online_correction_.enabled){
+	   for(int i=0; i< online_correction_.CorrectionNum; i++){
+	      SlideWindowMapDefusionPart();
+	   }
+	 }
 	 SlideWindowPose();
-	 cout << "mfusionFrameDataBase size 220:" << mfusionFrameDataBase.size() << endl;
          utils::Toc();
        }
        
        utils::Tic("Map decay");
        Decay();
+       if(online_correction_.enabled){
+	 DecayDefusionPart(); 
+       }
        utils::Toc();
    }
    else{
@@ -232,12 +238,20 @@ void DenseSlam::ProcessFrame(Input *input) {
 	 if(mfusionFrameDataBase.size() > slide_window_.max_age && slide_window_.enabled){
 	    utils::Tic("Slide Window");
             SlideWindowMap();
+	    if(online_correction_.enabled){
+	       for(int i=0; i< (online_correction_.CorrectionNum+1); i++){
+	          SlideWindowMapDefusionPart();
+	       }
+	    }
 	    SlideWindowPose();
             utils::Toc();
 	 }
 	 
 	 utils::Tic("Map decay");
          Decay();
+	 if(online_correction_.enabled){
+	   DecayDefusionPart(); 
+         }
          utils::Toc();
    }
    int64_t fusion_time = utils::Toc();
@@ -352,7 +366,7 @@ bool DenseSlam::OnlineCorrection(){
   //当找到的位姿误差大于10帧了
   //在线调整的帧数
   int correctNum = online_correction_.CorrectionNum;
-  if(mapPoseError.size()>10){
+  if(mapPoseError.size()> (online_correction_.StartToCorrectionNum-1)){
      
      int countNum = 0;
      map<float,mapKeyframeInfo,greater<float>>::iterator errorIter;
@@ -385,12 +399,13 @@ bool DenseSlam::OnlineCorrection(){
 // 	 std::cout << "DenseSlam.cpp 252: M_d: " << currPose.inv() << std::endl;
 
 	 static_scene_->SetPoseLocalMap(currentLocalMap, ORB_SLAM2::drivers::MatToEigen(currPose));
-	 static_scene_->IntegrateLocalMap(currentLocalMap);
+	 //onlyUpdateVisibleList = false, isDefusion = true
+	 static_scene_->IntegrateLocalMap(currentLocalMap, false, true);
 	 
 	 countNum ++;
        }
        
-       if(countNum > correctNum){
+       if(countNum > (correctNum-1)){
 	 break;
        }
     } 
