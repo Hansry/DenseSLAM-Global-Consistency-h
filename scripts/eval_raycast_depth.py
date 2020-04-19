@@ -45,7 +45,7 @@ def depth_gt_dilate(depth):
    return depth_dilated
 
 if __name__ == "__main__":
-   depth_raycast_set = sorted(glob.glob("../raycastdepth/2011_09_30_drive_0033_sync/*.png"))
+   depth_raycast_set = sorted(glob.glob("../raycastdepth/total/*_sync/*.png"))
    depth_pre_prefix_path = "../data/KITTI"
    depth_annotated_prefix_path = "../depth_annotated"
    avg_mae = 0 
@@ -73,6 +73,7 @@ if __name__ == "__main__":
        sub_dataset = ps[-2]
        depth_index = ps[-1]
 
+       print(sub_dataset)
        depth_pred_path = os.path.join(depth_pre_prefix_path, sub_dataset, "precomputed-depth", depth_index)
        depth_annotated_path = os.path.join(depth_annotated_prefix_path, sub_dataset, "proj_depth/groundtruth/image_02", depth_index)
 

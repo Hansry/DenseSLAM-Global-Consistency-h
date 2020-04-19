@@ -226,9 +226,9 @@ void DenseSlam::ProcessFrame(Input *input) {
        
        utils::Tic("Map decay");
        Decay();
-       if(online_correction_.enabled){
-	 DecayDefusionPart(); 
-       }
+//        if(online_correction_.enabled){
+// 	 DecayDefusionPart(); 
+//        }
        utils::Toc();
    }
    else{
@@ -249,9 +249,9 @@ void DenseSlam::ProcessFrame(Input *input) {
 	 
 	 utils::Tic("Map decay");
          Decay();
-	 if(online_correction_.enabled){
-	   DecayDefusionPart(); 
-         }
+// 	 if(online_correction_.enabled){
+// 	   DecayDefusionPart(); 
+//          }
          utils::Toc();
    }
    int64_t fusion_time = utils::Toc();
