@@ -7,6 +7,7 @@
 #include <iostream>
 #include <time.h>
 #include <string>
+#include <fstream>
 
 #include <gflags/gflags.h>
 #include <opencv/cv.h>

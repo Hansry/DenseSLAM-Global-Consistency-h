@@ -586,6 +586,14 @@ void PangolinGui::ProcessFrame(){
       static_cast<float>(curr_LocalMap_used_gpu_gb) * 10.24f
     );
     
+    string dstFile = "../memory.txt";
+    ofstream out(dstFile.c_str(),ios::app);
+    if(!out.is_open()){
+      throw runtime_error("open dstFile failed!");
+    }
+    out << dense_slam_->GetCurrentFrameNo() << " " << static_cast<float>(curr_LocalMap_used_gpu_gb) * 10.24f  << endl;
+    out.close();
+    
     int orbslamTrackIntensity = dense_slam_->mTrackIntensity;
     float PDThreshold = dense_slam_->GetPDThreadhold();
     data_log_track.Log(
